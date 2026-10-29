@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Easy Reader</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-theme="paper">
+
+<!-- Library -->
+<section id="library" class="view">
+  <header class="lib-head">
+    <div>
+      <h1>Easy Reader</h1>
+      <p class="muted" id="libCount">Your books</p>
+    </div>
+    <button id="addBtn" class="btn primary">+ Add book</button>
+  </header>
+  <div id="continueWrap"></div>
+  <div id="shelf" class="shelf"></div>
+  <div id="emptyState" class="empty hidden">
+    <div class="empty-art">📖</div>
+    <h2>No books yet</h2>
+    <p>Tap <b>Add book</b> and pick a PDF, EPUB or TXT file from your phone, or open one from your file manager with <b>Easy Reader</b>.</p>
+  </div>
+</section>
+
+<!-- Reader -->
+<section id="reader" class="view hidden">
+  <div id="stage"></div>
+  <div id="pageInfo" class="page-info"><span id="infoLeft"></span><span id="infoRight"></span></div>
+  <div id="warmth" class="warmth"></div>
+
+  <header id="topbar" class="bar top">
+    <button class="icon" id="backBtn" aria-label="Back to library">←</button>
+    <div class="bar-title"><b id="bookTitle"></b><small id="chapterTitle"></small></div>
+    <button class="icon" id="bookmarkBtn" aria-label="Bookmark this page">☆</button>
+    <button class="icon" id="tocBtn" aria-label="Contents">☰</button>
+    <button class="icon" id="settingsBtn" aria-label="Reading settings">Aa</button>
+  </header>
+
+  <footer id="bottombar" class="bar bottom">
+    <div class="row">
+      <button class="icon" id="prevBtn" aria-label="Previous page">‹</button>
+      <input type="range" id="progress" min="0" max="1000" value="0" aria-label="Position in book">
+      <button class="icon" id="nextBtn" aria-label="Next page">›</button>
+    </div>
+    <div class="row small"><span id="progressLabel">0%</span></div>
+    <div class="row chips">
+      <span id="zoomBox" class="hidden">
+        <button class="chip" id="zoomOut">−</button><span id="zoomLabel">100%</span><button class="chip" id="zoomIn">+</button>
+      </span>
+      <button class="chip pdf-only" id="ocrBtn">📝 Scan text</button>
+      <button class="chip" id="ttsBtn">🔊 Listen</button>
+    </div>
+  </footer>
+
+  <!-- Contents & bookmarks -->
+  <aside id="tocPanel" class="drawer">
+    <div class="tabs">
+      <button class="tab active" data-tab="toc">Contents</button>
+      <button class="tab" data-tab="marks">Bookmarks</button>
+      <button class="icon close" data-close>✕</button>
+    </div>
+    <div id="tocList" class="list"></div>
+    <div id="markList" class="list hidden"></div>
+  </aside>
+
+  <!-- Settings -->
+  <aside id="settingsPanel" class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="set-row">
+      <label>Theme</label>
+      <div class="swatches" id="themeSwatches">
+        <button data-theme="paper" title="Paper">Aa</button>
+        <button data-theme="sepia" title="Sepia">Aa</button>
+        <button data-theme="mint" title="Mint">Aa</button>
+        <button data-theme="dusk" title="Dusk">Aa</button>
+        <button data-theme="night" title="Night">Aa</button>
+      </div>
+    </div>
+
+    <div class="set-group text-only">
+      <div class="set-row">
+        <label>Text size</label>
+        <div class="stepper"><button data-step="fontSize" data-d="-1">A−</button><span id="fontSizeVal">18</span><button data-step="fontSize" data-d="1">A+</button></div>
+      </div>
+      <div class="set-row">
+        <label>Font</label>
+        <div class="seg" data-setting="font">
+          <button data-v="serif">Serif</button><button data-v="sans">Sans</button><button data-v="mono">Mono</button><button data-v="book" class="epub-only">Book's</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <label>Line spacing</label>
+        <input type="range" min="1.1" max="2.4" step="0.1" data-setting="lineHeight">
+      </div>
+      <div class="set-row">
+        <label>Margins</label>
+        <input type="range" min="4" max="56" step="2" data-setting="margin">
+      </div>
+      <div class="set-row">
+        <label>Line length</label>
+        <div class="seg" data-setting="measure"><button data-v="36">Short</button><button data-v="48">Medium</button><button data-v="62">Long</button><button data-v="0">Full</button></div>
+      </div>
+      <div class="set-row">
+        <label>Page border</label>
+        <input type="checkbox" class="switch" data-setting="frame">
+      </div>
+    </div>
+
+    <div class="set-row">
+      <label>Layout</label>
+      <div class="seg" data-setting="flow"><button data-v="paged">Pages</button><button data-v="scroll">Scroll</button></div>
+    </div>
+
+    <div class="set-group pdf-only">
+      <div class="set-row">
+        <label>PDF view</label>
+        <div class="seg" data-setting="pdfMode"><button data-v="page">Original</button><button data-v="reflow">Text only</button></div>
+      </div>
+      <p class="hint">“Text only” pulls the words out of the PDF so you can change size, font and spacing. Use “Original” for scanned books, comics and maths.</p>
+      <div class="set-row pdf-page-only">
+        <label>Trim white margins</label>
+        <input type="checkbox" class="switch" data-setting="pdfTrim">
+      </div>
+    </div>
+
+    <div class="set-group pdf-only">
+      <div class="set-row"><button class="btn primary" id="ocrBtn2" style="width:100%">📝 Scan text (for scanned or old books)</button></div>
+      <p class="hint">Reads the page pictures with OCR (English) so you get real, adjustable text. The first page takes a little longer; results are saved on your phone.</p>
+    </div>
+    <div class="set-row">
+      <label>Brightness</label>
+      <input type="range" min="0.02" max="1" step="0.02" data-setting="brightness">
+      <button class="chip" id="autoBright">Auto</button>
+    </div>
+    <div class="set-row">
+      <label>Warm light</label>
+      <input type="range" min="0" max="0.5" step="0.05" data-setting="warmth">
+    </div>
+    <div class="set-row">
+      <label>Read-aloud speed</label>
+      <input type="range" min="0.5" max="2" step="0.1" data-setting="ttsRate">
+    </div>
+    <div class="set-row"><label>Tap screen edges to turn pages</label><input type="checkbox" class="switch" data-setting="tapZones"></div>
+    <div class="set-row"><label>Volume keys turn pages</label><input type="checkbox" class="switch" data-setting="volumeKeys"></div>
+    <div class="set-row"><label>Keep screen on</label><input type="checkbox" class="switch" data-setting="keepAwake"></div>
+    <div class="set-row"><label>Full screen</label><input type="checkbox" class="switch" data-setting="fullscreen"></div>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+</section>
+
+<div id="busy" class="busy hidden"><div class="spinner"></div><p id="busyText">Opening…</p><p class="status" id="busyNote"></p></div>
+<div id="toast" class="toast"></div>
+
+<script src="lib/jszip.min.js"></script>
+<script src="lib/epub.min.js"></script>
+<script src="lib/pdf.min.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/readers.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
