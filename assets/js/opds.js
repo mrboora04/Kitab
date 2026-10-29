@@ -13,7 +13,8 @@ const Opds = (() => {
   /** A plain-language reason for a failed request. */
   function describeFailure(r) {
     const s = r.status;
-    if (s === 401 || s === 403) return `The catalog refused the request (${s}). It may need a login, or it may block apps.`;
+    if (s === 401) return 'This catalog needs a login.';
+    if (s === 403) return 'The catalog refused the request (403). It may be for members only, or it may block apps.';
     if (s === 404) return 'That catalog page was not found (404). The address may have changed.';
     if (s === 429) return 'The catalog says too many requests (429). Wait a minute and try again.';
     if (s >= 500) return `The catalog is having problems (${s}). Try again later.`;
@@ -21,6 +22,15 @@ const Opds = (() => {
     const e = r.error || '';
     if (/resolve host|UnknownHost|connect|timed out|timeout|reset|Network/i.test(e) || !e) return 'Could not reach the catalog. Check your internet connection and try again.';
     return e;
+  }
+
+  /* Catalog logins (Calibre-Web, Standard Ebooks Patrons...), kept on the phone and only sent to their own catalog. */
+  const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return ''; } };
+  const authFor = (u) => (store.get('er.auth', {})[hostOf(u)] || '');
+  function saveLogin(u, user, pass) {
+    const all = store.get('er.auth', {});
+    all[hostOf(u)] = 'Basic ' + btoa(unescape(encodeURIComponent(user + ':' + pass)));
+    store.set('er.auth', all);
   }
 
   const pending = {};
@@ -40,9 +50,15 @@ const Opds = (() => {
       pending[id] = (r) => {
         clearTimeout(timer);
         if (r.status >= 200 && r.status < 300) resolve(r);
-        else reject(new Error(describeFailure(r)));
+        else {
+          const err = new Error(describeFailure(r));
+          err.status = r.status;
+          err.needsLogin = r.status === 401;
+          err.host = hostOf(url);
+          reject(err);
+        }
       };
-      if (window.Android && Android.httpGet) Android.httpGet(id, url);
+      if (window.Android && Android.httpGet) Android.httpGet(id, url, authFor(url));
       else answer({ id, status: 0, error: 'Needs the Android app' });
     });
   }
@@ -168,5 +184,5 @@ const Opds = (() => {
     return Object.assign(parse(r.body, r.url), { url: r.url });
   }
 
-  return { load, parse, answer, searchUrl, fetchText };
+  return { load, parse, answer, searchUrl, fetchText, saveLogin, authFor };
 })();

@@ -348,12 +348,12 @@ public class MainActivity extends Activity {
 
         /** GET a catalog page. The answer arrives as App.onHttp({id, status, url, type, body, error}). */
         @JavascriptInterface
-        public void httpGet(final String id, final String url) {
+        public void httpGet(final String id, final String url, final String auth) {
             new Thread(new Runnable() { public void run() {
                 JSONObject out = new JSONObject();
                 try {
                     out.put("id", id);
-                    Http.Result r = Http.get(url, 6 << 20);
+                    Http.Result r = Http.get(url, 6 << 20, auth);
                     out.put("status", r.status).put("url", r.url).put("type", r.contentType == null ? "" : r.contentType)
                             .put("body", new String(r.body, "UTF-8"));
                 } catch (Exception e) {
@@ -366,7 +366,7 @@ public class MainActivity extends Activity {
 
         /** Downloads an EPUB/PDF into the library. Progress: App.onDownload(id, percent); done: App.onDownloaded(id, name, error). */
         @JavascriptInterface
-        public void downloadBook(final String id, final String url, final String title, final String coverUrl) {
+        public void downloadBook(final String id, final String url, final String title, final String coverUrl, final String auth) {
             new Thread(new Runnable() { public void run() {
                 String savedName = null, error = null;
                 try {
@@ -384,7 +384,7 @@ public class MainActivity extends Activity {
                                 runOnUiThread(new Runnable() { public void run() { js("window.App && App.onDownload(" + JSONObject.quote(id) + "," + pct + ")"); }});
                             }
                         }
-                    });
+                    }, auth);
                     String ext = Http.extensionFor(r.contentType, r.url);
                     if (ext == null) { tmp.delete(); throw new Exception("This file type is not supported (EPUB or PDF only)"); }
                     File dest = new File(booksDir, base + ext);
@@ -393,7 +393,7 @@ public class MainActivity extends Activity {
                     savedName = dest.getName();
                     if (coverUrl != null && coverUrl.length() > 0) {
                         try {
-                            Http.download(coverUrl, new File(coversDir, savedName + ".jpg"), 5L << 20, null);
+                            Http.download(coverUrl, new File(coversDir, savedName + ".jpg"), 5L << 20, null, auth);
                         } catch (Exception ignored) { /* the app draws a cover itself */ }
                     }
                 } catch (Exception e) {

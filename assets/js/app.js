@@ -20,6 +20,18 @@ const DEFAULTS = {
 const BAR_COLORS = { paper: '#fbf8f2', sepia: '#f1e6cf', mint: '#e2eddd', dusk: '#2a2b2f', night: '#000000' };
 const COVER_COLORS = [['#c45c34', '#7d3420'], ['#3c6e8f', '#1f3b52'], ['#4f7d4a', '#2b4a28'], ['#8a5a9e', '#4c2d5c'], ['#b0893a', '#6b511c'], ['#5d6470', '#2f343b']];
 
+const SUGGESTIONS = [
+  ['Pride and Prejudice', 'Jane Austen'], ['Frankenstein', 'Mary Shelley'], ['Moby Dick', 'Herman Melville'], ['Dracula', 'Bram Stoker'],
+  ["Alice's Adventures in Wonderland", 'Lewis Carroll'], ['The Adventures of Sherlock Holmes', 'Arthur Conan Doyle'], ['Little Women', 'Louisa May Alcott'],
+  ['The Great Gatsby', 'F. Scott Fitzgerald'], ['Jane Eyre', 'Charlotte Brontë'], ['Wuthering Heights', 'Emily Brontë'], ['A Tale of Two Cities', 'Charles Dickens'],
+  ['The Picture of Dorian Gray', 'Oscar Wilde'], ['The Odyssey', 'Homer'], ['Meditations', 'Marcus Aurelius'], ['The Art of War', 'Sun Tzu'],
+  ['The Count of Monte Cristo', 'Alexandre Dumas'], ['Crime and Punishment', 'Fyodor Dostoyevsky'], ['Les Misérables', 'Victor Hugo'],
+  ['The Time Machine', 'H. G. Wells'], ['Treasure Island', 'Robert Louis Stevenson'], ['Peter Pan', 'J. M. Barrie'], ['The Jungle Book', 'Rudyard Kipling'],
+  ['Siddhartha', 'Hermann Hesse'], ['Gitanjali', 'Rabindranath Tagore'], ['The Prophet', 'Kahlil Gibran'], ['Anne of Green Gables', 'L. M. Montgomery'],
+  ['The Secret Garden', 'Frances Hodgson Burnett'], ['Emma', 'Jane Austen'], ['Great Expectations', 'Charles Dickens'], ['The Call of the Wild', 'Jack London'],
+  ['Heart of Darkness', 'Joseph Conrad'], ['The Metamorphosis', 'Franz Kafka'], ['Don Quixote', 'Miguel de Cervantes'], ['Walden', 'Henry David Thoreau'],
+];
+
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* full or blocked */ } },
@@ -94,6 +106,7 @@ const App = {
     $$('#filters [data-f]').forEach((b) => { b.onclick = () => { this.lib.filter = b.dataset.f; this.saveLib(); this.renderLibrary(); }; });
     $$('#navbar [data-tab]').forEach((b) => { b.onclick = () => this.showTab(b.dataset.tab); });
     $('#browseAddBtn').onclick = () => this.showTab('browse');
+    this.renderSuggestions();
   },
 
   saveLib() { store.set('er.lib', { sort: this.lib.sort, filter: this.lib.filter }); },
@@ -180,6 +193,16 @@ const App = {
     $$('#pane-library [data-menu]').forEach((el) => { el.onclick = (e) => { e.stopPropagation(); this.bookMenu(el.dataset.menu, el); }; });
   },
 
+  /** Floating book ideas: free classics drifting by; tap one to find it in Project Gutenberg. */
+  renderSuggestions() {
+    const ideas = SUGGESTIONS.slice().sort(() => Math.random() - 0.5).slice(0, 14);
+    const chip = ([t, a]) => `<button class="idea" data-q="${esc(t)}"><b>${esc(t)}</b><small>${esc(a)}</small></button>`;
+    $('#suggestTrack').innerHTML = '<span class="idea-lead">Try a classic →</span>' + ideas.map(chip).join('') + ideas.map(chip).join('');   // twice, for a seamless loop
+    $$('#suggestTrack .idea').forEach((b) => {
+      b.onclick = () => { this.showTab('browse'); Browse.searchIn('gutenberg', b.dataset.q); };
+    });
+  },
+
   renderHistory() {
     const books = this.books().filter((b) => b.meta.lastRead).sort((a, b) => b.meta.lastRead - a.meta.lastRead);
     $('#historyEmpty').classList.toggle('hidden', books.length > 0);
@@ -239,22 +262,26 @@ const App = {
   },
 
   /** In-app dialog. Resolves to true / the typed text / null when cancelled. */
-  dialog({ title, message, input, ok, danger }) {
+  dialog({ title, message, input, ok, danger, login }) {
     return new Promise((resolve) => {
       const d = $('#dialog');
       $('#dlgTitle').textContent = title || '';
       $('#dlgMsg').textContent = message || '';
-      const field = $('#dlgInput');
-      field.classList.toggle('hidden', input == null);
+      const field = $('#dlgInput'), pass = $('#dlgPass');
+      field.classList.toggle('hidden', input == null && !login);
       field.value = input || '';
+      field.type = login ? 'text' : 'url';
+      field.placeholder = login ? 'Email or username' : '';
+      pass.classList.toggle('hidden', !login);
+      pass.value = '';
       const okBtn = $('#dlgOk');
       okBtn.textContent = ok || 'OK';
       okBtn.classList.toggle('danger', !!danger);
       d.classList.remove('hidden');
-      if (input != null) setTimeout(() => { field.focus(); field.select(); }, 50);
+      if (input != null || login) setTimeout(() => { field.focus(); field.select(); }, 50);
       const done = (v) => { d.classList.add('hidden'); okBtn.onclick = $('#dlgCancel').onclick = null; this._dialogOpen = false; resolve(v); };
       this._dialogOpen = () => done(null);
-      okBtn.onclick = () => done(input != null ? field.value : true);
+      okBtn.onclick = () => done(login ? { user: field.value.trim(), pass: pass.value } : input != null ? field.value : true);
       $('#dlgCancel').onclick = () => done(null);
     });
   },
@@ -297,12 +324,16 @@ const App = {
         const info = await this.pdf.getMetadata().catch(() => null);
         const t = info && info.info && info.info.Title;
         if (t && t.trim().length > 2 && !/^(untitled|microsoft word|scan)/i.test(t.trim()) && !this.meta.titleSet) this.meta.title = t.trim();
+        if (this.meta.ocr) { this.meta.pdfMode = 'reflow'; delete this.meta.ocr; }      // from older versions
+        if (this.meta.scanned == null) this.meta.scanned = await pdfLooksScanned(this.pdf);
+        this.settings.pdfMode = this.meta.pdfMode || 'page';                            // each PDF remembers its view
+        this.applySettings();
         await this.makePdfReader(this.meta.loc);
         if (!this.meta.cover) this.pdfCover();
-        if (!this.meta.ocr && !this.meta.ocrHinted && await pdfLooksScanned(this.pdf)) {
+        if (this.meta.scanned && this.settings.pdfMode !== 'reflow' && !this.meta.ocrHinted) {
           this.meta.ocrHinted = true;
           this.saveMeta();
-          setTimeout(() => toast('This looks like a scanned book. Tap 📝 Scan text to turn it into readable text.', 6000), 1200);
+          setTimeout(() => toast('A scanned book! Open Aa → Text only and Kitab will turn the pages into clear text.', 6000), 1200);
         }
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
@@ -336,14 +367,11 @@ const App = {
   async makePdfReader(loc) {
     const page = loc && loc.page || 1;
     if (this.reader) { this.reader.destroy(); this.reader = null; }
-    const ocr = !!this.meta.ocr;
-    const reflow = ocr || this.settings.pdfMode === 'reflow';
+    const reflow = this.settings.pdfMode === 'reflow';
     document.body.classList.toggle('pdf-reflow', reflow);
-    $('#ocrBtn').classList.toggle('on', ocr);
-    $('#ocrBtn').innerHTML = ocr ? '<span>📄</span>Original pages' : '<span>📝</span>Scan text';
     if (reflow) {
       const src = await pdfTextSource(this.pdf, {
-        ocr, key: this.name,
+        scanned: !!this.meta.scanned, key: this.name,
         onStatus: (msg) => {
           if (msg) busy(true, msg, OCR.worker ? '' : 'Starting the text reader (first time only)…');
           else if (this._opening !== true) busy(false);
@@ -395,6 +423,7 @@ const App = {
 
   async closeBook(keepView) {
     this.stopTts();
+    if (this.hlMode) this.toggleHl(false);
     Native.setSecure && Native.setSecure(false);
     this.saveNow();
     this.closePanels();
@@ -437,14 +466,19 @@ const App = {
     $('#chapterTitle').textContent = l.chapter || '';
     $('#infoLeft').textContent = l.chapter || (this.meta && this.meta.title) || '';
     $('#infoRight').textContent = pct + '%';
-    this.updateBookmarkBtn(l.loc);
     clearTimeout(this._save);
     this._save = setTimeout(() => this.saveNow(), 800);
   },
 
   /* ---------------- navigation & gestures ---------------- */
-  onTap(x) {
+  onTap(x, e) {
     if (this.panelOpen()) return this.closePanels();
+    if (this.hlMode && e && this.reader && this.reader.highlightAt) {        // highlighter: taps mark sentences
+      const h = this.reader.highlightAt(e.clientX, e.clientY);
+      if (h && h.remove) this.removeHighlight(h.remove);
+      else if (h) this.addHighlight(h);
+      return;
+    }
     if (this.tts) { this.stopTts(); toast('Stopped listening'); return; }   // tap anywhere to stop
     const ui = $('#reader').classList.contains('ui');
     if (this.settings.tapZones && !ui) {
@@ -512,10 +546,17 @@ const App = {
       if (this.reader) await this.reader.goToProgress(p.value / 1000);
       this.onRelocated();
     };
-    $('#bookmarkBtn').onclick = () => this.toggleBookmark();
+    $('#hlBtn').onclick = () => this.toggleHl();
+    document.addEventListener('selectionchange', () => {      // highlighter: a finished selection becomes a highlight
+      if (!this.hlMode || !(this.reader instanceof TextReader)) return;
+      clearTimeout(this._selT);
+      this._selT = setTimeout(() => {
+        const h = this.reader && this.reader.selectionHighlight && this.reader.selectionHighlight();
+        if (h) { window.getSelection().removeAllRanges(); this.addHighlight(h); }
+      }, 900);
+    });
     // reading tools live in the settings sheet; they close it so you land back on the page
     $('#ttsBtn').onclick = () => { if (this.tts) this.stopTts(); else { this.closePanels(); this.startTts(); } };
-    $('#ocrBtn').onclick = () => { this.closePanels(); this.toggleOcr(); };
     $('#zoomIn').onclick = () => this.zoom(0.25);
     $('#zoomOut').onclick = () => this.zoom(-0.25);
     document.addEventListener('keydown', (e) => {
@@ -523,30 +564,6 @@ const App = {
       if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); this.turn(1); }
       if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); this.turn(-1); }
     });
-  },
-
-  /** Switches a scanned PDF between its original pictures and OCR text. */
-  async toggleOcr(forceOn) {
-    if (!this.pdf || !this.reader) return;
-    const on = forceOn ? true : !this.meta.ocr;
-    if (on === !!this.meta.ocr) return;
-    const loc = this.reader.location().loc;
-    this.meta.ocr = on;
-    this.saveMeta();
-    busy(true, on ? 'Preparing text scan…' : 'Showing original pages…');
-    this._opening = true;
-    try {
-      await this.makePdfReader({ page: loc.page });
-    } catch (e) {
-      this.meta.ocr = false;
-      this.saveMeta();
-      toast('Text scan failed: ' + (e.message || e));
-      await this.makePdfReader({ page: loc.page });
-    }
-    this._opening = false;
-    busy(false);
-    this.toggleUi(false);
-    this.onRelocated();
   },
 
   zoom(d) {
@@ -575,57 +592,70 @@ const App = {
     $$('#tocList [data-i]').forEach((b) => {
       b.onclick = async () => { this.closePanels(); this.toggleUi(false); await this.reader.goTo(items[b.dataset.i].loc); this.onRelocated(); };
     });
-    this.renderMarks();
+    this.renderHighlights();
     const curBtn = $('#tocList .current');
     if (curBtn) setTimeout(() => curBtn.scrollIntoView({ block: 'center' }), 50);
   },
 
-  /* ---------------- bookmarks ---------------- */
-  sameLoc(a, b) {
-    if (!a || !b) return false;
-    if (a.cfi || b.cfi) return a.cfi === b.cfi;
-    if (a.s != null && b.s != null) return a.s === b.s && Math.abs((a.c || 0) - (b.c || 0)) < 40;
-    return a.page === b.page && a.s == null && b.s == null;
-  },
-  updateBookmarkBtn(loc) {
-    const on = !!(this.meta && (this.meta.bookmarks || []).some((m) => this.sameLoc(m.loc, loc)));
-    const b = $('#bookmarkBtn');
-    b.classList.toggle('on', on);
-    b.textContent = on ? '★' : '☆';
-  },
-  async toggleBookmark() {
-    const l = this.reader.location();
-    const marks = (this.meta.bookmarks = this.meta.bookmarks || []);
-    const i = marks.findIndex((m) => this.sameLoc(m.loc, l.loc));
-    if (i >= 0) { marks.splice(i, 1); toast('Bookmark removed'); } else {
-      let snippet = '';
-      try { snippet = (await this.reader.visibleText()).slice(0, 90); } catch (e) { /* none */ }
-      marks.push({ loc: l.loc, progress: l.progress, chapter: l.chapter, label: l.label, snippet, at: Date.now() });
-      marks.sort((a, b) => a.progress - b.progress);
-      toast('Bookmarked');
+  /* ---------------- highlights ---------------- */
+  hlMode: false,
+  highlights() { return (this.meta && this.meta.highlights) || []; },
+
+  toggleHl(force) {
+    const on = force != null ? force : !this.hlMode;
+    if (on && this.reader instanceof PdfPageReader) {
+      toast('Switch PDF view to Text only (Aa) to highlight', 3500);
+      return;
     }
-    this.saveMeta();
-    this.updateBookmarkBtn(l.loc);
+    this.hlMode = on;
+    $('#hlBtn').classList.toggle('on', on);
+    document.body.classList.toggle('hl-mode', on);
+    if (on) { this.toggleUi(true); toast('Highlighter on: tap a sentence or select words', 3000); }
   },
-  renderMarks() {
-    const marks = (this.meta && this.meta.bookmarks) || [];
-    $('#markList').innerHTML = marks.length ? marks.map((m, i) => `
-      <div class="mark"><button data-go="${i}">${esc(m.snippet || m.chapter || 'Bookmark')}…<small>${Math.round(m.progress * 100)}% · ${esc(m.chapter || m.label || '')}</small></button>
-      <button class="del" data-del="${i}" aria-label="Delete bookmark">✕</button></div>`).join('')
-      : '<div class="none">No bookmarks yet. Tap ☆ at the top while reading to add one.</div>';
+
+  async addHighlight(h) {
+    if (!this.meta || !h.text) return;
+    const l = this.reader.location();
+    h.id = 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    h.chapter = l.chapter;
+    h.progress = l.progress;
+    if (this.reader.src && this.reader.src.pdf) h.page = l.loc.page;
+    h.at = Date.now();
+    (this.meta.highlights = this.meta.highlights || []).push(h);
+    this.meta.highlights.sort((a, b) => a.progress - b.progress);
+    this.saveMeta();
+    this.reader.addMark(h);
+    toast('Highlighted');
+  },
+
+  removeHighlight(id) {
+    if (!this.meta) return;
+    if (this.reader && this.reader.removeMark) this.reader.removeMark(id);
+    this.meta.highlights = this.highlights().filter((h) => h.id !== id);
+    this.saveMeta();
+    toast('Highlight removed');
+  },
+
+  onHighlightTap(id) { if (this.hlMode) this.removeHighlight(id); },
+
+  renderHighlights() {
+    const list = this.highlights();
+    $('#markList').innerHTML = list.length ? list.map((h, i) => `
+      <div class="mark"><button data-go="${i}"><q>${esc(h.text.slice(0, 180))}${h.text.length > 180 ? '…' : ''}</q><small>${Math.round((h.progress || 0) * 100)}% · ${esc(h.chapter || '')}</small></button>
+      <button class="del" data-del="${i}" aria-label="Delete highlight">✕</button></div>`).join('')
+      : '<div class="none">No highlights yet. Tap 🖍 at the top, then tap a sentence or select words.</div>';
     $$('#markList [data-go]').forEach((b) => {
       b.onclick = async () => {
-        const m = marks[b.dataset.go];
+        const h = list[b.dataset.go];
         this.closePanels(); this.toggleUi(false);
-        // A PDF bookmark made in the other view mode still works through its page number.
-        const loc = this.reader instanceof PdfPageReader && m.loc.s != null ? { page: m.loc.page }
-          : this.reader instanceof TextReader && this.reader.src.pdf && m.loc.s == null ? this.reader.src.toLoc(m.loc.page) : m.loc;
-        await this.reader.goTo(loc);
+        if (h.cfi) await this.reader.goTo({ cfi: h.cfi });
+        else if (this.reader instanceof TextReader) await this.reader.goTo({ s: h.s, c: h.a });
+        else if (h.page) await this.reader.goTo({ page: h.page });
         this.onRelocated();
       };
     });
     $$('#markList [data-del]').forEach((b) => {
-      b.onclick = () => { marks.splice(Number(b.dataset.del), 1); this.saveMeta(); this.renderMarks(); this.onRelocated(); };
+      b.onclick = () => { this.removeHighlight(list[b.dataset.del].id); this.renderHighlights(); };
     });
   },
 
@@ -682,13 +712,18 @@ const App = {
     this.settings[key] = value;
     store.set('er.settings', this.settings);
     this.applySettings();
+    if (key === 'ttsRate' && this.tts && !live) { Native.stopSpeaking(); this.speakPage(); }
     if (live || old === value || !this.reader) return;
     const layoutKeys = ['fontSize', 'font', 'lineHeight', 'margin', 'flow', 'pdfTrim', 'measure', 'frame'];
     if (key === 'pdfMode') {
-      if (this.meta) this.meta.ocr = false;
+      if (this.meta) { this.meta.pdfMode = value; this.saveMeta(); }
       const l = this.reader.location().loc;
-      busy(true, value === 'reflow' ? 'Extracting text…' : 'Rendering pages…');
-      this.makePdfReader({ page: l.page }).then(() => { busy(false); this.onRelocated(); });
+      this.closePanels();
+      busy(true, value === 'reflow' ? (this.meta && this.meta.scanned ? 'Reading the scanned page…' : 'Getting the text…') : 'Showing the pages…');
+      this._opening = true;
+      this.makePdfReader({ page: l.page })
+        .catch((e) => toast('Could not show the text: ' + (e.message || e), 4000))
+        .finally(() => { this._opening = false; busy(false); this.toggleUi(false); this.onRelocated(); });
     } else if (layoutKeys.includes(key) || (key === 'theme' && this.reader instanceof EpubReader)) {
       clearTimeout(this._relayout);
       this._relayout = setTimeout(() => Promise.resolve(this.reader && this.reader.apply(this.settings)).then(() => this.onRelocated()), 150);
@@ -720,6 +755,7 @@ const App = {
     });
     $$('input[type=checkbox][data-setting]').forEach((c) => { c.checked = !!s[c.dataset.setting]; });
     $('#autoBright').classList.toggle('on', s.brightness == null);
+    $('#ttsRateLbl').textContent = Number(s.ttsRate).toFixed(1) + '×';
     Native.setBarColor(BAR_COLORS[s.theme], !['dusk', 'night'].includes(s.theme));
     Native.setVolumeKeys(!!s.volumeKeys);
     const reading = !!this.reader || !$('#reader').classList.contains('hidden');

@@ -39,8 +39,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .btn:disabled { opacity: .6; }
 .btn.danger { background: #d0453a; color: #fff; border-color: transparent; }
 .search { margin: 0 0 12px; }
-.search input, #dlgInput { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; outline: none; }
-.search input:focus, #dlgInput:focus { border-color: var(--accent); }
+.search input, #dlgInput, #dlgPass { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; outline: none; }
+.search input:focus, #dlgInput:focus, #dlgPass:focus { border-color: var(--accent); }
 .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 14px; scrollbar-width: none; }
 .chips .chip { flex: none; white-space: nowrap; }
 .chips .chip i { font-style: normal; opacity: .6; margin-left: 4px; font-size: 12px; }
@@ -378,3 +378,39 @@ body.funky .empty-art { animation: bob 3s ease-in-out infinite; display: inline-
 #pane-more .swatches { justify-content: flex-start; gap: 10px; }
 .cover .badge { top: 6px; left: 6px; }
 .cover.badged .gen .type:first-child { padding-left: 24px; line-height: 22px; margin-top: -6px; }
+
+/* ---------- Floating book ideas ---------- */
+.suggest { overflow: hidden; margin: -6px -16px 18px; padding: 4px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.suggest-track { display: flex; gap: 10px; width: max-content; padding: 0 16px; }
+.idea-lead { align-self: center; font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; text-transform: uppercase; letter-spacing: .06em; }
+.idea { display: flex; flex-direction: column; align-items: flex-start; padding: 8px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); white-space: nowrap; text-align: left; }
+.idea b { font: 600 14px Georgia, serif; }
+.idea small { color: var(--muted); font-size: 11px; }
+body.funky .suggest-track { animation: drift 70s linear infinite; }
+body.funky .suggest:active .suggest-track { animation-play-state: paused; }
+body.funky .idea:nth-child(3n) { transform: translateY(5px) rotate(-1.5deg); }
+body.funky .idea:nth-child(3n+1) { transform: translateY(-3px) rotate(1deg); }
+body.funky .idea { border-width: 2px; border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+body:not(.funky) .suggest { overflow-x: auto; scrollbar-width: none; }
+@keyframes drift { to { transform: translateX(-50%); } }
+
+/* ---------- Listen with its speed slider ---------- */
+.tool.listen { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 12px 10px; }
+.tool.listen > button { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; padding: 6px; border-radius: 10px; }
+.tool.listen.on > button, #ttsBtn.on { color: var(--accent); }
+.speed { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.speed input { flex: 1; height: 32px; }
+.speed b { min-width: 40px; text-align: right; font: 700 13px system-ui, sans-serif; color: var(--accent); }
+
+/* ---------- Highlights ---------- */
+.tv mark.hl { background: color-mix(in srgb, var(--accent) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+body.hl-mode .tv { cursor: text; }
+body.hl-mode .tv p, body.hl-mode .tv h2 { -webkit-user-select: text; user-select: text; }
+#hlBtn.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.list .mark q { display: block; font: italic 15px/1.45 Georgia, serif; quotes: "“" "”"; border-left: 3px solid var(--accent); padding-left: 10px; margin-bottom: 4px; }
+.loading-more { opacity: .7; }
+
+/* ---------- Zoomed original pages: room to push any line to where your eyes are ---------- */
+.pdf-wrap.paged.zoomed { display: block; padding: 50vh 30vw; }
+.pdf-wrap.paged.zoomed .pdf-page { margin: 0; }
+#dlgPass { margin-top: 10px; }

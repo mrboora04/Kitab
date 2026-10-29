@@ -52,18 +52,21 @@ Tap the edges to turn pages. Tap the middle for the menu. That's all.
 Tap **Aa**. Pick a theme, a font, a size. Night mode is true black.
 
 **5. Got an old scanned book?**
-Tap **Aa**, then **Scan text**. The page pictures become real text you can resize.
+Tap **Aa**, then **Text only**. Kitab reads the scanned pages itself and turns them into clear text you can resize.
 
 **6. Eyes tired?**
-Tap **Aa**, then **Listen**. Kitab reads to you and turns the pages. Tap the screen to stop.
+Tap **Aa**, then **Listen**. Slide the 🐢—🐇 bar for the speed you like. Tap the screen to stop.
 
-**7. Come back any time.**
+**7. Mark what matters.**
+Tap 🖍, then tap any sentence (or select a few words). Find them all later under ☰ → Highlights.
+
+**8. Come back any time.**
 Kitab remembers where you stopped, in every book. Open the app, tap **Continue reading**.
 
-**8. Rest your eyes.**
+**9. Rest your eyes.**
 Every 30 minutes of reading, Kitab suggests a 20-second look into the distance. Skip it twice and it gently closes the book for a short rest. Change it in **More**.
 
-**9. Make it look like you.**
+**10. Make it look like you.**
 Tap **More**: Funky or Classic style, six colours, five themes.
 
 ## Privacy and content

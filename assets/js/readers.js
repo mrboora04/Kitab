@@ -58,8 +58,8 @@ function attachGestures(el, app, canSwipe) {
     }
   }, { passive: true });
   el.addEventListener('click', (e) => {
-    if (hasSelection() || e.target.closest('a, button, input')) return;
-    app.onTap(e.clientX / window.innerWidth);
+    if ((hasSelection() && !app.hlMode) || e.target.closest('a, button, input')) return;
+    app.onTap(e.clientX / window.innerWidth, e);
   });
 }
 
@@ -84,6 +84,7 @@ class TextReader {
     attachGestures(this.frame, app, () => this.paged);
     this.wrap.addEventListener('scroll', () => {
       if (this.paged) return;
+      this.fill();                                   // keep the parts above and below loaded: one long scroll
       clearTimeout(this._st);
       this._st = setTimeout(() => app.onRelocated(), 120);
     });
@@ -106,22 +107,67 @@ class TextReader {
     this.frame.className = 'page-frame ' + (this.paged ? 'paged' : 'scroll');
   }
 
+  /* A book is split into parts ("sections"). Paged mode shows one part; scroll mode strings several together. */
+  secHtml(s, html) {
+    return `<div class="sec" data-s="${s}">${html || '<p class="notice">This part has no text.</p>'}\n<div class="sec-end"></div></div>`;
+  }
+
   async show(s, at) {
     s = clamp(s, 0, this.src.count - 1);
     const token = (this._token = {});
     const html = await this.src.load(s);
     if (token !== this._token) return;
     this.s = s;
-    const prevPart = !this.paged && s > 0 ? '<p class="pmark"><button class="chip" data-go="-1">‹ Previous part</button></p>' : '';
-    const nextPart = !this.paged && s < this.src.count - 1 ? '<p class="pmark"><button class="chip" data-go="1">Next part ›</button></p>' : '';
-    this.tv.innerHTML = prevPart + (html || '<p class="notice">This part has no text.</p>') + '\n<div class="sec-end"></div>' + nextPart;
-    this.tv.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => this.show(this.s + Number(b.dataset.go), b.dataset.go < 0 ? { end: true } : {})));
-    this._text = null;
+    this.tv.innerHTML = this.secHtml(s, html);
+    this.secEl = this.tv.firstElementChild;
+    this.paint(this.secEl);
     this.layout();
     if (at.end) this.toEnd();
     else if (at.anchor) this.toAnchor(at.anchor);
     else this.toOffset(at.c || 0);
+    if (!this.paged) await this.fill();
     this.app.onRelocated();
+  }
+
+  /** Scroll mode: load the next part before you reach the bottom, the previous one near the top, drop far ones. */
+  async fill() {
+    if (this.paged || this._filling || !this.tv.firstElementChild) return;
+    this._filling = true;
+    const token = this._token;
+    try {
+      const w = this.wrap;
+      let last = this.tv.lastElementChild;
+      while (Number(last.dataset.s) < this.src.count - 1 && w.scrollTop + w.clientHeight > w.scrollHeight - w.clientHeight * 1.5) {
+        const n = Number(last.dataset.s) + 1;
+        this.tv.insertAdjacentHTML('beforeend', '<p class="pmark loading-more">Loading…</p>');
+        const html = await (this.src.quiet || this.src.load)(n);
+        this.tv.querySelectorAll('.loading-more').forEach((e) => e.remove());
+        if (token !== this._token || this.paged) return;
+        this.tv.insertAdjacentHTML('beforeend', this.secHtml(n, html));
+        last = this.tv.lastElementChild;
+        this.paint(last);
+      }
+      const first = this.tv.firstElementChild;
+      if (Number(first.dataset.s) > 0 && w.scrollTop < w.clientHeight * 0.75) {
+        const n = Number(first.dataset.s) - 1;
+        const html = await (this.src.quiet || this.src.load)(n);
+        if (token !== this._token || this.paged) return;
+        const before = w.scrollHeight;
+        this.tv.insertAdjacentHTML('afterbegin', this.secHtml(n, html));
+        this.paint(this.tv.firstElementChild);
+        w.scrollTop += w.scrollHeight - before;     // keep the same words under your eyes
+      }
+      while (this.tv.children.length > 4) {
+        const wr = w.getBoundingClientRect(), top = this.tv.firstElementChild, bottom = this.tv.lastElementChild;
+        if (top.getBoundingClientRect().bottom < wr.top - w.clientHeight * 2) { const h = top.offsetHeight; top.remove(); w.scrollTop -= h; }
+        else if (bottom.getBoundingClientRect().top > wr.bottom + w.clientHeight * 2) bottom.remove();
+        else break;
+      }
+      if (!this.secEl || !this.secEl.isConnected) { this.secEl = this.tv.firstElementChild; this.s = Number(this.secEl.dataset.s); }
+    } finally {
+      this._filling = false;
+      this.tv.querySelectorAll('.loading-more').forEach((e) => e.remove());
+    }
   }
 
   layout() {
@@ -142,13 +188,10 @@ class TextReader {
     this.tv.style.transform = `translateX(${-this.page * this.pageW}px)`;
   }
 
-  /* --- character offsets <-> DOM positions --- */
-  textNodes() {
-    const out = [];
-    const w = document.createTreeWalker(this.tv, NodeFilter.SHOW_TEXT);
-    let n, pos = 0;
-    while ((n = w.nextNode())) { out.push([n, pos]); pos += n.length; }
-    this._len = pos;
+  /* --- character offsets within the current part <-> DOM positions --- */
+  textNodes(root) {
+    const out = textNodesOf(root || this.secEl || this.tv);
+    if (!root) this._len = out.length ? out[out.length - 1][1] + out[out.length - 1][0].length : 0;
     return out;
   }
 
@@ -177,34 +220,47 @@ class TextReader {
     return null;
   }
 
-  /** Character offset of the first word on screen. */
-  topOffset() {
+  /** Makes the part that contains `node` the current one (scroll mode has several on screen). */
+  pick(node) {
+    const el = node.nodeType === 3 ? node.parentElement : node;
+    const sec = el && el.closest('.sec');
+    if (sec && sec !== this.secEl) { this.secEl = sec; this.s = Number(sec.dataset.s); }
+  }
+
+  topRange() {
     const b = this.wrap.getBoundingClientRect();
     const top = this.paged ? b.top : Math.max(b.top, 0) + 28;
     for (let y = top + 4; y < b.bottom; y += 8) {
       for (const x of [b.left + 4, b.left + b.width / 3, b.left + b.width / 2]) {
         const r = this.caretAt(x, y);
-        if (r) return this.offsetOf(r.startContainer, r.startOffset);
+        if (r) return r;
       }
     }
-    if (this.paged) return this.page === 0 ? 0 : null;
     return null;
   }
 
-  bottomOffset() {
+  bottomRange() {
     const b = this.wrap.getBoundingClientRect();
     for (let y = b.bottom - 4; y > b.top; y -= 8) {
       for (const x of [b.right - 4, b.right - b.width / 3, b.left + 4]) {
         const r = this.caretAt(x, y);
-        if (r) return this.offsetOf(r.startContainer, r.startOffset);
+        if (r) return r;
       }
     }
+    return null;
+  }
+
+  /** Character offset of the first word on screen. */
+  topOffset() {
+    const r = this.topRange();
+    if (r) { this.pick(r.startContainer); return this.offsetOf(r.startContainer, r.startOffset); }
+    if (this.paged) return this.page === 0 ? 0 : null;
     return null;
   }
 
   toOffset(c) {
     const r = this.rangeAt(c);
-    if (!r) { this.paged ? this.setPage(0) : (this.wrap.scrollTop = 0); return; }
+    if (!r) { this.paged ? this.setPage(0) : this.toRect(this.secEl.getBoundingClientRect()); return; }
     this.toRect(r.getBoundingClientRect());
   }
 
@@ -227,28 +283,30 @@ class TextReader {
 
   toEnd() {
     if (this.paged) this.setPage(this.pages - 1);
-    else this.wrap.scrollTop = this.wrap.scrollHeight;
+    else this.wrap.scrollTop += this.secEl.getBoundingClientRect().bottom - this.wrap.getBoundingClientRect().bottom;
   }
 
   /* --- navigation --- */
   async next() {
     if (this.paged) {
       if (this.page < this.pages - 1) { this.setPage(this.page + 1); this.app.onRelocated(); return true; }
-    } else {
-      const w = this.wrap;
-      if (w.scrollTop + w.clientHeight < w.scrollHeight - 4) { w.scrollBy({ top: w.clientHeight - 60 }); return true; }
+      if (this.s < this.src.count - 1) { await this.show(this.s + 1, {}); return true; }
+      return false;
     }
-    if (this.s < this.src.count - 1) { await this.show(this.s + 1, {}); return true; }
+    const w = this.wrap;
+    await this.fill();
+    if (w.scrollTop + w.clientHeight < w.scrollHeight - 4) { w.scrollBy({ top: w.clientHeight - 60 }); return true; }
     return false;
   }
 
   async prev() {
     if (this.paged) {
       if (this.page > 0) { this.setPage(this.page - 1); this.app.onRelocated(); return true; }
-    } else if (this.wrap.scrollTop > 0) {
-      this.wrap.scrollBy({ top: -(this.wrap.clientHeight - 60) }); return true;
+      if (this.s > 0) { await this.show(this.s - 1, { end: true }); return true; }
+      return false;
     }
-    if (this.s > 0) { await this.show(this.s - 1, { end: true }); return true; }
+    await this.fill();
+    if (this.wrap.scrollTop > 0) { this.wrap.scrollBy({ top: -(this.wrap.clientHeight - 60) }); return true; }
     return false;
   }
 
@@ -258,9 +316,9 @@ class TextReader {
     let s = 0;
     while (s < this.src.count - 1 && this.before[s + 1] <= f) s++;
     const inside = this.share[s] ? (f - this.before[s]) / this.share[s] : 0;
-    return this.show(s, { frac: inside }).then(() => {
+    return this.show(s, {}).then(async () => {
       if (this.paged) this.setPage(Math.round(inside * (this.pages - 1)));
-      else this.wrap.scrollTop = inside * (this.wrap.scrollHeight - this.wrap.clientHeight);
+      else { this.wrap.scrollTop += inside * this.secEl.offsetHeight; await this.fill(); }
       this.app.onRelocated();
     });
   }
@@ -269,9 +327,12 @@ class TextReader {
     let c = this.topOffset();
     if (c == null) c = 0;
     if (this._len == null) this.textNodes();
-    const inSection = this.paged
-      ? (this.pages > 1 ? this.page / (this.pages - 1) : 0)
-      : clamp(this.wrap.scrollTop / Math.max(1, this.wrap.scrollHeight - this.wrap.clientHeight), 0, 1);
+    let inSection;
+    if (this.paged) inSection = this.pages > 1 ? this.page / (this.pages - 1) : 0;
+    else {
+      const sr = this.secEl.getBoundingClientRect(), wr = this.wrap.getBoundingClientRect();
+      inSection = clamp((wr.top + 28 - sr.top) / Math.max(1, sr.height), 0, 1);
+    }
     const progress = this.before[this.s] + this.share[this.s] * inSection;
     const loc = { s: this.s, c };
     let label;
@@ -286,7 +347,7 @@ class TextReader {
 
   pdfPageAt(c) {
     let page = this.s * this.src.perSection + 1;
-    for (const m of this.tv.querySelectorAll('.pmark[id]')) {
+    for (const m of this.secEl.querySelectorAll('.pmark[id]')) {
       const off = this.offsetOf(m.firstChild, 0);
       if (off <= c + 1) page = Number(m.id.slice(3));
     }
@@ -298,7 +359,7 @@ class TextReader {
     for (const t of this.src.toc) {
       if (page != null ? t.loc.page > page : t.loc.s > s) break;
       if (page == null && t.loc.s === s && t.loc.anchor) {
-        const el = this.tv.querySelector('#' + CSS.escape(t.loc.anchor));
+        const el = this.secEl.querySelector('#' + CSS.escape(t.loc.anchor));
         if (el && el.firstChild && this.offsetOf(el.firstChild, 0) > c + 1) break;
       }
       label = t.label;
@@ -309,23 +370,67 @@ class TextReader {
   toc() { return this.src.toc; }
 
   async visibleText() {
-    if (this._len == null) this.textNodes();
-    const a = this.topOffset() || 0;
-    let b = this.bottomOffset();
-    if (b == null || b <= a) b = a + 1500;
-    let text = '';
-    for (const [n, pos] of this.textNodes()) {
-      const end = pos + n.length;
-      if (end <= a || pos >= b + 1) continue;
-      text += n.data.slice(Math.max(0, a - pos), Math.min(n.length, b + 1 - pos)) + (n.parentNode.tagName === 'P' ? ' ' : '\n');
+    const a = this.topRange(), b = this.bottomRange();
+    if (a && b && a.compareBoundaryPoints(Range.START_TO_START, b) <= 0) {
+      const r = document.createRange();
+      r.setStart(a.startContainer, a.startOffset);
+      r.setEnd(b.startContainer, b.startOffset);
+      const t = rangeText(r);
+      if (t.trim()) return t;
     }
-    return text.replace(/\s+/g, ' ').trim();
+    return (this.secEl.textContent || '').slice(0, 1500).replace(/\s+/g, ' ').trim();
+  }
+
+  /* --- highlights: { id, s, a, b } character ranges inside part s --- */
+  paint(sec) {
+    const s = Number(sec.dataset.s);
+    for (const h of this.app.highlights()) if (h.s === s && h.a != null) markRange(sec, h.a, h.b, h.id);
+  }
+
+  addMark(h) {
+    const sec = this.tv.querySelector(`.sec[data-s="${h.s}"]`);
+    if (sec) markRange(sec, h.a, h.b, h.id);
+  }
+
+  removeMark(id) { unmark(this.tv, id); }
+
+  /** A tap in highlight mode: the sentence under the finger, or an existing highlight to remove. */
+  highlightAt(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    const mk = hit && hit.closest && hit.closest('mark.hl');
+    if (mk) return { remove: mk.dataset.h };
+    const r = this.caretAt(x, y);
+    if (!r) return null;
+    this.pick(r.startContainer);
+    const block = r.startContainer.parentElement.closest('p, h2, li, blockquote');
+    if (!block || !this.secEl.contains(block)) return null;
+    const nodes = textNodesOf(block);
+    if (!nodes.length) return null;
+    const base = this.offsetOf(nodes[0][0], 0);
+    const at = this.offsetOf(r.startContainer, r.startOffset) - base;
+    const [a, b] = sentenceAround(block.textContent, at);
+    if (b <= a) return null;
+    return { s: this.s, a: base + a, b: base + b, text: block.textContent.slice(a, b).trim() };
+  }
+
+  /** The current text selection as a highlight (then the selection is cleared). */
+  selectionHighlight() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+    const r = sel.getRangeAt(0);
+    if (!this.tv.contains(r.startContainer) || r.startContainer.nodeType !== 3) return null;
+    this.pick(r.startContainer);
+    const a = this.offsetOf(r.startContainer, r.startOffset);
+    const text = r.toString();
+    let b = r.endContainer.nodeType === 3 && this.secEl.contains(r.endContainer) ? this.offsetOf(r.endContainer, r.endOffset) : a + text.length;
+    if (b <= a) return null;
+    return { s: this.s, a, b, text: text.replace(/\s+/g, ' ').trim() };
   }
 
   relayout() {
     const loc = this._last ? this._last.loc : { s: this.s };
     this.setMode();
-    this.show(this.s, loc);
+    this.show(loc.s != null ? loc.s : this.s, loc);
   }
 
   apply() { this.relayout(); }
@@ -335,6 +440,54 @@ class TextReader {
     this._token = null;
     this.frame.remove();
   }
+}
+
+/* ---------- small text helpers shared by the readers ---------- */
+function textNodesOf(root) {
+  const out = [];
+  const w = (root.ownerDocument || document).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n, pos = 0;
+  while ((n = w.nextNode())) { out.push([n, pos]); pos += n.length; }
+  return out;
+}
+
+/** [start, end) of the sentence around character `at` of `text`. */
+function sentenceAround(text, at) {
+  let a = 0, b = text.length;
+  const re = /[.!?…]["”’)\]]*\s+/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const end = m.index + m[0].length;
+    if (end <= at) a = end;
+    else { b = m.index + m[0].trimEnd().length; break; }
+  }
+  while (a < b && /\s/.test(text[a])) a++;
+  return [a, b];
+}
+
+/** Wraps characters [a, b) of `root`'s text in <mark class="hl" data-h="id">. */
+function markRange(root, a, b, id) {
+  for (const [n, pos] of textNodesOf(root)) {
+    const start = Math.max(a, pos), end = Math.min(b, pos + n.length);
+    if (start >= end || !n.data.slice(start - pos, end - pos).trim()) continue;
+    let target = n;
+    if (end < pos + n.length) target.splitText(end - pos);
+    if (start > pos) target = target.splitText(start - pos);
+    const m = (root.ownerDocument || document).createElement('mark');
+    m.className = 'hl';
+    m.dataset.h = id;
+    target.parentNode.insertBefore(m, target);
+    m.appendChild(target);
+  }
+}
+
+function unmark(root, id) {
+  root.querySelectorAll(`mark.hl[data-h="${id}"]`).forEach((m) => {
+    const parent = m.parentNode;
+    while (m.firstChild) parent.insertBefore(m.firstChild, m);
+    m.remove();
+    parent.normalize();
+  });
 }
 
 /* ---------- TXT source ---------- */
@@ -481,12 +634,19 @@ async function ocrPageHtml(pdf, n, key, onStatus) {
 async function pdfTextSource(pdf, opts) {
   opts = opts || {};
   const onStatus = opts.onStatus || (() => {});
-  const per = opts.ocr ? 1 : 6;
+  const per = opts.scanned ? 1 : 6;   // scanned books: one page per part, each read by OCR as you go
   const count = Math.ceil(pdf.numPages / per);
   const cache = new Map();
   const pending = new Map();
   const toLoc = (page) => ({ s: Math.floor((page - 1) / per), anchor: 'pg-' + page, page });
-  const pageHtml = async (n, status) => (opts.ocr ? ocrPageHtml(pdf, n, opts.key, status) : pdfPageHtml(await pdf.getPage(n), n));
+  // Use the PDF's own text; a page without real text (a scan or a picture) is read with OCR instead.
+  const pageHtml = async (n, status) => {
+    if (!opts.scanned) {
+      const html = await pdfPageHtml(await pdf.getPage(n), n);
+      if (html.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length >= 40) return html;
+    }
+    return ocrPageHtml(pdf, n, opts.key, status);
+  };
   const load = (i, silent) => {
     if (cache.has(i)) return Promise.resolve(cache.get(i));
     if (!pending.has(i)) pending.set(i, build(i, silent).finally(() => pending.delete(i)));
@@ -504,16 +664,14 @@ async function pdfTextSource(pdf, opts) {
         parts.push(`<div class="pmark" id="pg-${n}">— ${n} —</div>`, html);
       }
     } finally { status(null); }
-    const hint = opts.ocr
-      ? 'No readable text was found on this page. It may be blank or a picture.'
-      : 'No text found on these pages — this PDF is probably a scan. Tap <b>📝 Scan text</b> at the bottom to read it with OCR.';
+    const hint = 'No readable text was found here. It may be a blank page or a picture — switch PDF view to Original to see it.';
     const html = words < 20 ? parts.join('\n') + `<p class="notice">${hint}</p>` : parts.join('\n');
     cache.set(i, html);
     if (cache.size > 8) cache.delete(cache.keys().next().value);
-    if (opts.ocr && i + 1 < count) setTimeout(() => load(i + 1, true).catch(() => {}), 50);  // read ahead quietly while you read
+    if (opts.scanned && i + 1 < count) setTimeout(() => load(i + 1, true).catch(() => {}), 50);  // read ahead quietly while you read
     return html;
   };
-  return { count, weights: Array.from({ length: count }, (_, i) => Math.min(per, pdf.numPages - i * per)), load: (i) => load(i, false), toc: await pdfToc(pdf, toLoc), pdf, perSection: per, toLoc };
+  return { count, weights: Array.from({ length: count }, (_, i) => Math.min(per, pdf.numPages - i * per)), load: (i) => load(i, false), quiet: (i) => load(i, true), toc: await pdfToc(pdf, toLoc), pdf, perSection: per, toLoc };
 }
 
 /* ======================================================================
@@ -649,7 +807,10 @@ class PdfPageReader {
     if (token !== this._token) return;
     this.wrap.innerHTML = '';
     this.wrap.appendChild(box);
-    this.wrap.scrollTop = 0; this.wrap.scrollLeft = 0;
+    if (this.zoom > 1) {   // start at the top-left of the page; the padding lets you push it anywhere
+      this.wrap.scrollTop = box.offsetTop - 16;
+      this.wrap.scrollLeft = box.offsetLeft - 16;
+    } else { this.wrap.scrollTop = 0; this.wrap.scrollLeft = 0; }
     this.cur = box;
     this.app.onRelocated();
   }
@@ -829,14 +990,61 @@ class EpubReader {
         this.app.onSwipe(dx < 0 ? 1 : -1);
       }
     });
+    // Highlighter: select text, or tap a sentence; tap a highlight to remove it.
+    r.on('selected', (cfiRange, contents) => {
+      if (!this.app.hlMode) return;
+      const sel = contents.window.getSelection();
+      const text = String(sel || '').replace(/\s+/g, ' ').trim();
+      if (text) this.app.addHighlight({ cfi: cfiRange, text });
+      sel.removeAllRanges();
+    });
     r.on('click', (e) => {
       if (Date.now() - (this._swiped || 0) < 400) return;
+      if (this.app.hlMode) { setTimeout(() => { if (Date.now() - (this._hlHit || 0) > 400) this.highlightTap(e); }, 0); return; }
       const sel = e.view.getSelection();
       if ((sel && String(sel).trim()) || e.target.closest('a')) return;
       const fr = e.view.frameElement.getBoundingClientRect();
       this.app.onTap((e.clientX + fr.left) / window.innerWidth);
     });
     await r.display(cfi || undefined);
+    for (const h of this.app.highlights()) if (h.cfi) this.addMark(h);
+  }
+
+  addMark(h) {
+    const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#c45c34';
+    try {
+      this.rendition.annotations.highlight(h.cfi, { id: h.id }, () => { this._hlHit = Date.now(); this.app.onHighlightTap(h.id); }, 'hl',
+        { fill: accent, 'fill-opacity': '0.32', 'mix-blend-mode': 'multiply' });
+    } catch (e) { /* a highlight from an older layout */ }
+  }
+
+  removeMark(id) {
+    const h = this.app.highlights().find((x) => x.id === id);
+    if (h && h.cfi) this.rendition.annotations.remove(h.cfi, 'highlight');
+  }
+
+  /** Tap in highlight mode: the sentence under the finger. */
+  highlightTap(e) {
+    const doc = e.view.document;
+    const r = doc.caretRangeFromPoint && doc.caretRangeFromPoint(e.clientX, e.clientY);
+    if (!r || r.startContainer.nodeType !== 3) return;
+    const block = r.startContainer.parentElement.closest('p, li, blockquote, h1, h2, h3, h4, h5, h6, div');
+    if (!block) return;
+    const nodes = textNodesOf(block);
+    let at = 0;
+    for (const [n, pos] of nodes) if (n === r.startContainer) at = pos + r.startOffset;
+    const [a, b] = sentenceAround(block.textContent, at);
+    if (b <= a) return;
+    const range = doc.createRange();
+    for (const [n, pos] of nodes) {
+      if (a >= pos && a <= pos + n.length) { range.setStart(n, a - pos); break; }
+    }
+    for (const [n, pos] of nodes) {
+      if (b >= pos && b <= pos + n.length) { range.setEnd(n, b - pos); break; }
+    }
+    const contents = this.rendition.getContents().find((c) => c.document === doc);
+    if (!contents) return;
+    this.app.addHighlight({ cfi: contents.cfiFromRange(range), text: range.toString().replace(/\s+/g, ' ').trim() });
   }
 
   next() { return this.rendition.next().then(() => true); }

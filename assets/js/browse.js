@@ -12,6 +12,8 @@ const Browse = {
       id: 'standardebooks', name: 'Standard Ebooks', blurb: 'Carefully formatted free editions of classics', icon: '✒️',
       url: 'https://standardebooks.org/feeds/opds',
       search: 'https://standardebooks.org/feeds/opds/all?query={searchTerms}',
+      // Their full catalog feed may be for Patrons Circle members only; New releases is the free part.
+      fallback: 'https://standardebooks.org/feeds/opds/new-releases', fallbackTitle: 'New releases',
     },
   ],
   custom: store.get('er.sources', []),
@@ -72,7 +74,16 @@ const Browse = {
     if (!url || !/^https?:\/\/\S+$/i.test(url.trim())) { if (url) App.toast('That does not look like a web address'); return; }
     busy(true, 'Checking the catalog…');
     try {
-      const feed = await Opds.load(url.trim());
+      let feed;
+      try { feed = await Opds.load(url.trim()); } catch (e) {
+        if (!e.needsLogin) throw e;
+        busy(false);
+        const login = await App.dialog({ title: 'Log in to ' + e.host, message: 'This catalog asks for your account. Kitab keeps the login on this phone and only sends it to ' + e.host + '.', login: true, ok: 'Log in' });
+        if (!login || !login.user) return;
+        Opds.saveLogin(url.trim(), login.user, login.pass);
+        busy(true, 'Checking the catalog…');
+        feed = await Opds.load(url.trim());
+      }
       const host = new URL(url.trim()).host;
       const src = { id: 'c' + Date.now(), name: feed.title || host, blurb: host, url: url.trim(), icon: '🌐' };
       this.custom.push(src);
@@ -86,6 +97,15 @@ const Browse = {
     }
   },
 
+  /** Opens a search straight away (used by the floating book ideas in the library). */
+  async searchIn(id, q) {
+    const src = this.all().find((x) => x.id === id);
+    if (!src) return;
+    this.stack = [];
+    const url = await Opds.searchUrl(src, null, q);
+    if (url) this.open(src, url, `“${q}”`);
+  },
+
   /* ---------------- feeds ---------------- */
   openSource(src) { return this.open(src, src.url, src.name); },
 
@@ -96,6 +116,15 @@ const Browse = {
       this.stack.push({ source: src, url, feed, title: title || feed.title, scroll: 0 });
       this.renderFeed();
     } catch (e) {
+      // a members-only catalog: try its free part first
+      if ((e.status === 401 || e.status === 403) && src.fallback && url === src.url && !this._triedFallback) {
+        this._triedFallback = true;
+        try { return await this.open(src, src.fallback, src.fallbackTitle || title); } finally { this._triedFallback = false; }
+      }
+      if (e.needsLogin) {
+        const login = await App.dialog({ title: 'Log in to ' + (src.name || e.host), message: 'This catalog asks for your account. Kitab keeps the login on this phone and only sends it to ' + e.host + '.', login: true, ok: 'Log in' });
+        if (login && login.user) { Opds.saveLogin(url, login.user, login.pass); return this.open(src, url, title); }
+      }
       if (!this.stack.length) {   // nothing loaded yet: show an empty page with a header so Back still works
         $('#feedTitle').textContent = title || src.name;
         $('#feedSearch').classList.add('hidden');
@@ -355,7 +384,7 @@ const Browse = {
     const id = 'd' + Date.now();
     this.downloads[id] = { entry, pct: 0 };
     this.drawSheet();
-    if (window.Android && Android.downloadBook) Android.downloadBook(id, format.url, entry.title, entry.cover || '');
+    if (window.Android && Android.downloadBook) Android.downloadBook(id, format.url, entry.title, entry.cover || '', Opds.authFor(format.url));
     else this.onDownloaded(id, null, 'Needs the Android app');
   },
 

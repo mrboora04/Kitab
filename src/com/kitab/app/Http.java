@@ -28,8 +28,9 @@ final class Http {
     private Http() { }
 
     /** Opens a connection and follows redirects by hand (HttpURLConnection will not switch between http and https). */
-    private static HttpURLConnection open(String address) throws IOException {
+    private static HttpURLConnection open(String address, String auth) throws IOException {
         String current = address;
+        String authHost = new URL(address).getHost();
         for (int i = 0; i <= MAX_REDIRECTS; i++) {
             URL url = new URL(current);
             String scheme = url.getProtocol();
@@ -40,6 +41,8 @@ final class Http {
             c.setReadTimeout(30000);
             c.setRequestProperty("User-Agent", USER_AGENT);
             c.setRequestProperty("Accept", "application/atom+xml, application/xml, text/xml, application/epub+zip, application/pdf, image/*, */*;q=0.5");
+            // a catalog login is only ever sent to the catalog's own address, never to a site it redirects to
+            if (auth != null && !auth.isEmpty() && url.getHost().equalsIgnoreCase(authHost)) c.setRequestProperty("Authorization", auth);
             int code = c.getResponseCode();
             if (code >= 300 && code < 400) {
                 String loc = c.getHeaderField("Location");
@@ -55,7 +58,11 @@ final class Http {
 
     /** Fetches a small document (catalog feed, search description) into memory. */
     static Result get(String address, int maxBytes) throws IOException {
-        HttpURLConnection c = open(address);
+        return get(address, maxBytes, null);
+    }
+
+    static Result get(String address, int maxBytes, String auth) throws IOException {
+        HttpURLConnection c = open(address, auth);
         try {
             Result r = new Result();
             r.status = c.getResponseCode();
@@ -81,7 +88,11 @@ final class Http {
 
     /** Streams a file to disk; the destination only appears once the download has finished completely. */
     static Result download(String address, File dest, long maxBytes, Progress progress) throws IOException {
-        HttpURLConnection c = open(address);
+        return download(address, dest, maxBytes, progress, null);
+    }
+
+    static Result download(String address, File dest, long maxBytes, Progress progress, String auth) throws IOException {
+        HttpURLConnection c = open(address, auth);
         File part = new File(dest.getPath() + ".part");
         try {
             Result r = new Result();
