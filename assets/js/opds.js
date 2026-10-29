@@ -50,9 +50,19 @@ const Opds = (() => {
   const abs = (href, base) => { try { return new URL(href, base).toString(); } catch (e) { return ''; } };
   const text = (el, tag) => { const n = el.getElementsByTagName(tag)[0]; return n ? n.textContent.trim() : ''; };
   const clean = (html) => {
-    const d = new DOMParser().parseFromString(html || '', 'text/html');
-    return (d.body.textContent || '').replace(/\s+/g, ' ').trim();
+    const spaced = (html || '').replace(/<\/?(p|div|br|li|ul|ol|h[1-6]|tr|td)\b[^>]*>/gi, ' ');
+    const d = new DOMParser().parseFromString(spaced, 'text/html');
+    return (d.body.textContent || '').replace(/\bLanguage:\s*[A-Za-z]+\.?/g, '').replace(/\s+/g, ' ').trim();
   };
+
+  /** A book's description from <content> or <summary>, whether it is plain text, escaped HTML or inline XHTML. */
+  function describe(e) {
+    const kids = Array.from(e.children);
+    const el = kids.find((c) => c.localName === 'content') || kids.find((c) => c.localName === 'summary');
+    if (!el) return '';
+    if ((el.getAttribute('type') || 'text').toLowerCase() === 'xhtml') return clean(new XMLSerializer().serializeToString(el));
+    return clean(el.textContent);
+  }
 
   function links(el, base) {
     return Array.from(el.children).filter((c) => c.localName === 'link').map((l) => ({
@@ -91,22 +101,34 @@ const Opds = (() => {
     }
     const thumb = ls.find((l) => l.rel === REL_THUMB) || ls.find(isImage);
     const title = text(e, 'title') || 'Untitled';
-    const summary = clean(text(e, 'content') || text(e, 'summary'));
+    let summary = describe(e);
     const entry = {
-      id: text(e, 'id'), title, authors, summary,
+      id: text(e, 'id'), title, authors, summary, note: '',
       cover: thumb ? thumb.href : '',
       formats: rankFormats(formats),
     };
+    // Some feeds (Project Gutenberg) put only the author, or a download count, in a book's short description
+    const splitShort = () => {
+      if (!entry.authors.length && entry.summary && entry.summary.length <= 90 && !/[.!?]\s/.test(entry.summary)) {
+        if (/^\d[\d,.]*\s+downloads?$/i.test(entry.summary)) entry.note = entry.summary; else entry.authors.push(entry.summary);
+        entry.summary = '';
+      }
+    };
     if (!entry.formats.length) {
-      // Gutenberg-style feeds list books without download links; the full entry is one more request away
       const detail = ls.find((l) => /application\/atom\+xml/.test(l.type) && /entry/.test(l.type))
         || ls.find((l) => l.rel === 'alternate' && /atom|opds/.test(l.type));
       const nav = ls.find((l) => l.rel === 'subsection' || l.rel === 'http://opds-spec.org/sort/new' || l.rel === 'http://opds-spec.org/sort/popular'
         || l.rel === 'http://opds-spec.org/featured' || (/atom\+xml/.test(l.type) && /kind=(navigation|acquisition)/.test(l.type)) || l.rel === 'start');
-      if (nav && !detail) return { title, summary, nav: nav.href, authors };
-      if (detail) entry.detail = detail.href;
+      // A listing without download links is a book when it has cover art or points at a single-book page
+      // (Gutenberg lists books as plain "subsection" links); anything else is a folder.
+      const single = [detail, nav].filter(Boolean).find((l) => /\/ebooks\/\d+\.opds|\/entry\b|\/book\//.test(l.href) || (l === detail));
+      const bookLike = !!thumb || !!single;
+      const target = (detail || nav || {}).href;
+      if (bookLike && target) { entry.detail = target; entry.maybeFolder = !detail; }
       else if (nav) return { title, summary, nav: nav.href, authors };
+      else if (detail) entry.detail = detail.href;
     }
+    splitShort();
     return entry;
   }
 

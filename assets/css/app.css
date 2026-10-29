@@ -282,3 +282,14 @@ body.frame-on .page-frame .tv-wrap.paged { border-radius: 4px; }
 .tool { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); font-weight: 600; }
 .tool span { font-size: 18px; }
 .tool.on { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
+/* Catalog book rows: cover on the left, text on the right */
+.li.item { align-items: flex-start; padding: 12px 2px; }
+.li.item .thumb { width: 64px; height: 96px; }
+.li.item .row-text b { -webkit-line-clamp: 2; }
+.desc { font-size: 13px; line-height: 1.4; color: var(--fg); opacity: .78; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
+.desc.ghost { height: 52px; border-radius: 6px; background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; opacity: .7; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.tags:empty { display: none; }
+.tags em.note { color: var(--muted); font-weight: 500; }

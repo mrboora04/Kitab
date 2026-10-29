@@ -19,6 +19,9 @@ const Browse = {
   downloads: {},      // id -> { entry, pct }
   saved: store.get('er.dl', {}),   // entry id -> file name of a book downloaded from a catalog
   sheetEntry: null,
+  queue: [],
+  busyLoads: 0,
+  io: null,
 
   init() {
     $('#addSource').onclick = () => this.addSource();
@@ -134,29 +137,118 @@ const Browse = {
     $('#feedList').parentElement.scrollTop = view.scroll || 0;
   },
 
+  rowHtml(e, idx) {
+    if (e.nav) {
+      return `<button class="li nav" data-nav="${idx}"><span class="folder">📁</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
+    }
+    const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
+    const have = this.have(e);
+    const desc = e.summary ? `<span class="desc">${esc(e.summary.slice(0, 260))}</span>` : (e.detail && !e._tried ? '<span class="desc ghost"></span>' : '');
+    return `<button class="li item" data-book="${idx}">
+        <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
+        <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', ') || e.note || '')}</small>${desc}
+          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
+  },
+
   drawEntries(view, entries, append) {
     const list = $('#feedList');
-    if (!append) list.innerHTML = '';
-    const frag = entries.map((e, i) => {
-      const idx = (append ? view.drawn : 0) + i;
-      if (e.nav) {
-        return `<button class="li nav" data-nav="${idx}"><span class="folder">📁</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
-      }
-      const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
-      const have = this.have(e);
-      return `<button class="li item" data-book="${idx}">
-        <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
-        <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', '))}</small>${fmt ? `<em>${fmt}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}</span></button>`;
-    }).join('');
-    list.insertAdjacentHTML('beforeend', frag);
-    view.drawn = (append ? view.drawn : 0) + entries.length;
-    view.all = (append ? view.all : []).concat(entries);
-    $$('#feedList [data-nav]').forEach((b) => { b.onclick = () => this.leave(view, () => this.open(view.source, view.all[b.dataset.nav].nav, view.all[b.dataset.nav].title)); });
-    $$('#feedList [data-book]').forEach((b) => { b.onclick = () => this.showBook(view.all[b.dataset.book]); });
+    if (!append) { list.innerHTML = ''; view.all = []; view.drawn = 0; }
+    const start = view.drawn;
+    view.all = view.all.concat(entries);
+    view.drawn += entries.length;
+    list.insertAdjacentHTML('beforeend', entries.map((e, i) => this.rowHtml(e, start + i)).join(''));
+    this.bindRows(view, start);
     $('#feedMore').classList.toggle('hidden', !view.feed.next);
     $('#feedMore').textContent = 'Load more';
     $('#feedMore').onclick = () => this.more(view);
     if (!entries.length && !append) list.innerHTML = '<p class="none">Nothing found here.</p>';
+  },
+
+  bindRows(view, from) {
+    $$('#feedList .li').forEach((el) => {
+      const nav = el.dataset.nav, book = el.dataset.book;
+      const idx = Number(nav != null ? nav : book);
+      if (idx < from || el._bound) return;
+      el._bound = true;
+      if (nav != null) el.onclick = () => this.leave(view, () => this.open(view.source, view.all[idx].nav, view.all[idx].title));
+      else {
+        el.onclick = () => this.showBook(view.all[idx]);
+        const e = view.all[idx];
+        if (e.detail && !e.summary && !e._tried) this.watch(el, view, idx);
+      }
+    });
+  },
+
+  /** Fetch a book's description and formats when its row scrolls into view (two at a time, quietly). */
+  watch(el, view, idx) {
+    if (!this.io) {
+      this.io = new IntersectionObserver((hits) => hits.forEach((h) => {
+        if (!h.isIntersecting) return;
+        this.io.unobserve(h.target);
+        this.queue.push(h.target);
+        this.pump();
+      }), { root: $('#feedList').parentElement, rootMargin: '200px 0px' });
+      this.queue = [];
+      this.busyLoads = 0;
+    }
+    el._view = view; el._idx = idx;
+    this.io.observe(el);
+  },
+
+  pump() {
+    while (this.busyLoads < 2 && this.queue.length) {
+      const el = this.queue.shift();
+      const view = el._view, e = view.all[el._idx];
+      if (!el.isConnected || !e || e._tried || e._loading) continue;
+      this.busyLoads++;
+      this.hydrate(e).finally(() => {
+        this.busyLoads--;
+        this.refreshRow(view, el._idx);
+        if (this.sheetEntry === e) this.drawSheet();
+        this.pump();
+      });
+    }
+  },
+
+  /** Loads a book's own page: description, formats, and whether it is really a folder of other entries. */
+  hydrate(e) {
+    if (e._p) return e._p;                      // a row and the book sheet can ask at the same time
+    if (e._done) return Promise.resolve();
+    e._loading = true;
+    e._p = (async () => {
+      try {
+        const doc = await Opds.load(e.detail);
+        const full = doc.entries.find((x) => x.formats && x.formats.length);
+        if (full) {
+          Object.assign(e, { formats: full.formats, summary: full.summary || e.summary, cover: e.cover || full.cover });
+          if (!e.authors.length) e.authors = full.authors;
+          e._done = true;
+        } else if (doc.entries.length > 1 && e.maybeFolder) {
+          e.nav = e.detail;                      // not a single book: it is a folder of entries
+        } else {
+          const one = doc.entries[0];
+          if (one) { e.summary = one.summary || e.summary; if (!e.authors.length) e.authors = one.authors; }
+          e._done = true;
+        }
+        e._error = '';
+      } catch (err) {
+        e._error = err.message;
+      }
+      e._tried = true;
+      e._loading = false;
+      e._p = null;
+    })();
+    return e._p;
+  },
+
+  refreshRow(view, idx) {
+    const el = $(`#feedList [data-book="${idx}"], #feedList [data-nav="${idx}"]`);
+    if (!el || this.stack[this.stack.length - 1] !== view) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = this.rowHtml(view.all[idx], idx);
+    const fresh = tmp.firstElementChild;
+    el.replaceWith(fresh);
+    this.bindRows(view, idx);
   },
 
   leave(view, then) {
@@ -217,16 +309,14 @@ const Browse = {
     this.drawSheet();
     $('#bookSheet').classList.add('open');
     $('#sheetScrim').classList.add('on');
-    if (!entry.formats.length && entry.detail && !entry._loading) {
-      entry._loading = true;
-      try {
-        const doc = await Opds.load(entry.detail);
-        const full = doc.entries.find((x) => x.formats && x.formats.length) || doc.entries[0];
-        Object.assign(entry, { formats: full.formats, summary: full.summary || entry.summary, cover: entry.cover || full.cover, authors: entry.authors.length ? entry.authors : full.authors });
-      } catch (e) {
-        entry._error = e.message;
+    if (!entry.formats.length && entry.detail && !entry._loading && !entry._done) {
+      await this.hydrate(entry);
+      if (entry.nav) {                            // it turned out to be a folder, not a book
+        this.closeSheet();
+        const view = this.stack[this.stack.length - 1];
+        return this.open(view.source, entry.nav, entry.title);
       }
-      entry._loading = false;
+      if (entry._error) entry._tried = false;
       if (this.sheetEntry === entry) this.drawSheet();
     }
   },
