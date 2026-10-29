@@ -119,10 +119,10 @@ const Opds = (() => {
         || ls.find((l) => l.rel === 'alternate' && /atom|opds/.test(l.type));
       const nav = ls.find((l) => l.rel === 'subsection' || l.rel === 'http://opds-spec.org/sort/new' || l.rel === 'http://opds-spec.org/sort/popular'
         || l.rel === 'http://opds-spec.org/featured' || (/atom\+xml/.test(l.type) && /kind=(navigation|acquisition)/.test(l.type)) || l.rel === 'start');
-      // A listing without download links is a book when it has cover art or points at a single-book page
+      // A listing without download links is a book only when it points at a single-book page
       // (Gutenberg lists books as plain "subsection" links); anything else is a folder.
       const single = [detail, nav].filter(Boolean).find((l) => /\/ebooks\/\d+\.opds|\/entry\b|\/book\//.test(l.href) || (l === detail));
-      const bookLike = !!thumb || !!single;
+      const bookLike = !!single;   // cover art alone does not make a book: folders often carry an icon
       const target = (detail || nav || {}).href;
       if (bookLike && target) { entry.detail = target; entry.maybeFolder = !detail; }
       else if (nav) return { title, summary, nav: nav.href, authors };
