@@ -93,13 +93,19 @@ const Browse = {
       this.stack.push({ source: src, url, feed, title: title || feed.title, scroll: 0 });
       this.renderFeed();
     } catch (e) {
+      if (!this.stack.length) {   // nothing loaded yet: show an empty page with a header so Back still works
+        $('#feedTitle').textContent = title || src.name;
+        $('#feedSearch').classList.add('hidden');
+        $('#feedList').innerHTML = '';
+        $('#feedMore').classList.add('hidden');
+      }
       this.status('error', e.message, () => this.open(src, url, title));
-      if (!this.stack.length) $('#sourceView').classList.remove('hidden');
     }
   },
 
   status(kind, msg, retry) {
     const box = $('#feedStatus');
+    this.errorShown = kind === 'error';
     if (kind === 'loading') {
       $('#sourceView').classList.add('hidden');
       $('#feedView').classList.remove('hidden');
@@ -109,7 +115,7 @@ const Browse = {
       box.innerHTML = `<p>⚠️ ${esc(msg || 'Something went wrong')}</p><button class="btn primary" id="retry">Try again</button> <button class="btn" id="giveUp">Back</button>`;
       box.classList.remove('hidden');
       $('#retry').onclick = retry;
-      $('#giveUp').onclick = () => { box.classList.add('hidden'); this.stack.length ? this.renderFeed() : this.renderSources(); };
+      $('#giveUp').onclick = () => this.back();
     } else box.classList.add('hidden');
   },
 
@@ -188,7 +194,12 @@ const Browse = {
   /** Back one level; false when already at the list of catalogs. */
   back() {
     if (this.sheetEntry) { this.closeSheet(); return true; }
-    if (!this.stack.length) return false;
+    if (this.errorShown) {            // dismiss an error and return to what was on screen before
+      this.status('done');
+      this.stack.length ? this.renderFeed() : this.renderSources();
+      return true;
+    }
+    if ($('#feedView').classList.contains('hidden')) return false;
     this.stack.pop();
     this.status('done');
     this.renderFeed();

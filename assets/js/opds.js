@@ -10,6 +10,19 @@ const Opds = (() => {
   const REL_IMG = 'http://opds-spec.org/image';
   const REL_THUMB = 'http://opds-spec.org/image/thumbnail';
 
+  /** A plain-language reason for a failed request. */
+  function describeFailure(r) {
+    const s = r.status;
+    if (s === 401 || s === 403) return `The catalog refused the request (${s}). It may need a login, or it may block apps.`;
+    if (s === 404) return 'That catalog page was not found (404). The address may have changed.';
+    if (s === 429) return 'The catalog says too many requests (429). Wait a minute and try again.';
+    if (s >= 500) return `The catalog is having problems (${s}). Try again later.`;
+    if (s) return `The catalog answered ${s}.`;
+    const e = r.error || '';
+    if (/resolve host|UnknownHost|connect|timed out|timeout|reset|Network/i.test(e) || !e) return 'Could not reach the catalog. Check your internet connection and try again.';
+    return e;
+  }
+
   const pending = {};
   let counter = 0;
 
@@ -27,7 +40,7 @@ const Opds = (() => {
       pending[id] = (r) => {
         clearTimeout(timer);
         if (r.status >= 200 && r.status < 300) resolve(r);
-        else reject(new Error(r.status ? `The catalog answered ${r.status}` : (r.error || 'No internet connection')));
+        else reject(new Error(describeFailure(r)));
       };
       if (window.Android && Android.httpGet) Android.httpGet(id, url);
       else answer({ id, status: 0, error: 'Needs the Android app' });
@@ -98,6 +111,7 @@ const Opds = (() => {
   }
 
   function parse(xml, base) {
+    if (/^\s*(<!doctype html|<html)/i.test(xml)) throw new Error('The site sent a web page instead of a catalog. It may block apps or need a login.');
     const doc = new DOMParser().parseFromString(xml, 'application/xml');
     if (doc.getElementsByTagName('parsererror').length) throw new Error('This address is not an OPDS catalog');
     const root = doc.documentElement;
