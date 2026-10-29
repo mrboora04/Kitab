@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kitab – free book reader for Android</title>
+<meta name="description" content="Kitab is a free Android book reader for EPUB, PDF and TXT with a free public-domain library and offline scanning for old books.">
+<meta property="og:title" content="Kitab – free book reader for Android">
+<meta property="og:description" content="Read EPUB, PDF and TXT. Browse free classics. Scan old books into readable text. No ads, no account.">
+<meta property="og:image" content="screens/library.png">
+<link rel="icon" href="icon.png">
+<style>
+  :root { --bg:#fbf8f2; --fg:#24211c; --muted:#7d7468; --accent:#c45c34; --panel:#fff; --line:rgba(0,0,0,.09); }
+  @media (prefers-color-scheme: dark) { :root { --bg:#17161a; --fg:#ece7de; --muted:#a49d92; --panel:#222127; --line:rgba(255,255,255,.1); } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+  header.hero { text-align: center; padding: 56px 0 24px; }
+  .hero img.icon { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  h1 { font: 800 clamp(38px, 8vw, 60px)/1.05 Georgia, "Noto Serif", serif; margin: 18px 0 8px; letter-spacing: -.5px; }
+  .tag { font-size: clamp(18px, 3.5vw, 22px); color: var(--muted); margin: 0 auto 26px; max-width: 620px; }
+  .dl { display: inline-block; line-height: 0; border-radius: 22px; transition: transform .15s; }
+  .dl:hover { transform: translateY(-2px); }
+  .dl img { width: min(360px, 88vw); height: auto; }
+  .fine { color: var(--muted); font-size: 14px; margin-top: 10px; }
+  .shots { display: flex; gap: 16px; overflow-x: auto; padding: 28px 20px 14px; scroll-snap-type: x mandatory; justify-content: safe center; }
+  .shots img { height: 460px; width: auto; border-radius: 18px; box-shadow: 0 6px 22px rgba(0,0,0,.16); scroll-snap-align: center; flex: none; background: var(--panel); }
+  h2 { font: 700 28px Georgia, serif; margin: 44px 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .card b { display: block; margin-bottom: 4px; }
+  .card span { color: var(--muted); font-size: 15px; }
+  ol { padding-left: 22px; } li { margin: 8px 0; }
+  .qr { text-align: center; margin: 30px 0; }
+  .qr img { width: 150px; border-radius: 12px; background: #fff; padding: 6px; }
+  footer { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0 60px; }
+</style>
+</head>
+<body>
+<header class="hero wrap">
+  <img class="icon" src="icon.png" alt="Kitab">
+  <h1>Kitab</h1>
+  <p class="tag">A free, fast book reader for Android. Read EPUB, PDF and TXT, find free classics, and turn scanned old books into text you can read comfortably.</p>
+  <a class="dl" href="https://github.com/mrboora04/Kitab/raw/main/dist/Kitab.apk"><img src="download-button.svg" alt="Download Kitab for Android"></a>
+  <div class="fine">Free · no ads · no account · Android 5.0 or newer</div>
+</header>
+
+<div class="shots">
+  <img src="screens/library.png" alt="Library with covers, filters and progress">
+  <img src="screens/browse.png" alt="Browse free books with cover art and descriptions">
+  <img src="screens/reader.png" alt="Clean reading page">
+  <img src="screens/night.png" alt="Night theme">
+  <img src="screens/settings.png" alt="Reading settings">
+</div>
+
+<main class="wrap">
+  <h2>Why Kitab</h2>
+  <div class="grid">
+    <div class="card"><b>📚 Your library</b><span>Covers, progress, favourites, search and filters. Picks up exactly where you stopped.</span></div>
+    <div class="card"><b>🌐 Free books built in</b><span>Browse Project Gutenberg and Standard Ebooks, or add your own Calibre library. Download with one tap.</span></div>
+    <div class="card"><b>📝 Scan old books</b><span>Turn scanned pages into clean, resizable text. Works offline and ignores decorations and borders.</span></div>
+    <div class="card"><b>🎨 Read your way</b><span>Five themes, fonts, text size, line length and a clean page border. Whole words, never stretched spacing.</span></div>
+    <div class="card"><b>🔊 Read aloud</b><span>Let your phone read to you and turn the pages for you.</span></div>
+    <div class="card"><b>🔒 Private</b><span>No ads, no tracking, no account. Your books and progress stay on your phone.</span></div>
+  </div>
+
+  <h2>Install in 3 taps</h2>
+  <ol>
+    <li>Tap <b>Download Kitab</b> on your Android phone.</li>
+    <li>Open the downloaded file <b>Kitab.apk</b>.</li>
+    <li>If Android asks, allow <b>Install unknown apps</b> for your browser, then tap <b>Install</b>.</li>
+  </ol>
+
+  <div class="qr">
+    <img src="qr-download.png" alt="QR code to download Kitab">
+    <div class="fine">On a computer? Scan with your phone.</div>
+  </div>
+</main>
+
+<footer>
+  Kitab is free and open source · <a href="https://github.com/mrboora04/Kitab">View on GitHub</a><br>
+  Built-in catalogs offer public-domain books only.
+</footer>
+</body>
+</html>

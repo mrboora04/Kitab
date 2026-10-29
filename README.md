@@ -1,10 +1,41 @@
-# Kitab – Kitab (Android)
+<p align="center">
+  <img src="docs/icon.png" width="96" alt="Kitab icon">
+</p>
 
-A small (~8 MB) Android app for reading the books you've downloaded, with more comfortable
-settings than a plain PDF viewer. Reading works offline.
+<h1 align="center">Kitab</h1>
+<p align="center"><b>A free, fast book reader for Android.</b><br>
+EPUB · PDF · TXT · free public-domain library · scan old books into readable text</p>
 
-**Download:** [`dist/Kitab.apk`](dist/Kitab.apk). Open it on your phone and allow
-"Install unknown apps" for your browser or file manager when Android asks.
+<p align="center">
+  <a href="https://github.com/mrboora04/Kitab/raw/main/dist/Kitab.apk">
+    <img src="docs/download-button.svg" width="360" alt="Download Kitab for Android">
+  </a>
+</p>
+
+<p align="center">
+  <sub>Free · no ads · no account · Android 5.0 or newer</sub>
+</p>
+
+<p align="center">
+  <img src="docs/qr-download.png" width="130" alt="QR code to download Kitab"><br>
+  <sub>On your computer? Scan this with your phone to download.</sub>
+</p>
+
+### Install in 3 taps
+
+1. Tap **Download Kitab** above on your Android phone.
+2. Open the downloaded file **Kitab.apk**.
+3. If Android asks, allow **Install unknown apps** for your browser, then tap **Install**.
+
+<p align="center">
+  <img src="docs/screens/library.png" width="19%" alt="Library">
+  <img src="docs/screens/browse.png" width="19%" alt="Browse free books">
+  <img src="docs/screens/reader.png" width="19%" alt="Reading">
+  <img src="docs/screens/night.png" width="19%" alt="Night theme">
+  <img src="docs/screens/settings.png" width="19%" alt="Reading settings">
+</p>
+
+---
 
 ## What it does
 
