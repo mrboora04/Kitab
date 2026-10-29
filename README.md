@@ -60,8 +60,16 @@ Tap **Aa**, then **Listen**. Kitab reads to you and turns the pages. Tap the scr
 **7. Come back any time.**
 Kitab remembers where you stopped, in every book. Open the app, tap **Continue reading**.
 
+**8. Rest your eyes.**
+Every 30 minutes of reading, Kitab suggests a 20-second look into the distance. Skip it twice and it gently closes the book for a short rest. Change it in **More**.
+
+**9. Make it look like you.**
+Tap **More**: Funky or Classic style, six colours, five themes.
+
 ## Privacy and content
 
+- Book pages are **protected from screenshots and screen recording** (switch it off in More if you like).
+- The app's data is never included in device backups, and the reading screen cannot open other sites or run book scripts.
 - The only permission is **Internet**, used for the Browse tab. No accounts, no ads, no analytics, nothing is sent anywhere except the catalog requests you make.
 - Reading progress, bookmarks and scanned text stay on your phone.
 - Kitab does **not** include or link to sources of pirated books. The built-in catalogs offer public-domain books only. Catalogs you add yourself are your responsibility; use libraries you have the right to read.

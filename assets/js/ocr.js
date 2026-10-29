@@ -47,6 +47,7 @@ const OCR = {
       const pre = this.clean(canvas);
       const { data } = await this.worker.recognize(pre.canvas);
       const caps = await this.readDropCaps(pre.caps);
+      await Words.load();
       return this.layout(data, caps, pre.medH);
     });
     this.queue = job.catch(() => {});
@@ -260,9 +261,123 @@ const OCR = {
       prevIndented = indented;
     }
     return paras
-      .map((p) => ({ heading: p.heading, text: p.text.replace(/([a-z])- (?=[a-z])/g, '$1').replace(/\s+/g, ' ').trim() }))
+      .map((p) => ({ heading: p.heading, text: Words.fix(p.text.replace(/\s+/g, ' ').trim()) }))
       .filter((p, i, a) => p.text.replace(/[^A-Za-z0-9]/g, '').length > 1
         && !((/^\d{1,4}$/.test(p.text) || /^[ivxlcdm]{1,7}$/i.test(p.text)) && (i === 0 || i === a.length - 1)))  // page numbers
       .map((p) => (p.heading ? `<h2>${esc(p.text)}</h2>` : `<p>${esc(p.text)}</p>`)).join('\n');
+  },
+};
+
+
+/*
+ * Word repair after OCR, using an English word list (SCOWL, ~80k words incl. British spellings).
+ * It is careful by design: a word is changed only when exactly one sensible fix exists.
+ *   - typical scanner confusions: rn→m, cl→d, li→h, vv→w, 1→l, 0→o ...
+ *   - run-together words: "artitexpressed" → "art it expressed"
+ *   - words split at a line end: "ra- tional" → "rational", but "burgher- life" stays "burgher-life"
+ * Names and old spellings that appear several times in the book are learned and left alone,
+ * and capitalised words (likely names) are never changed.
+ */
+const Words = {
+  rank: null,
+  loading: null,
+  seen: new Map(),      // words met in this book so far -> count
+
+  load() {
+    if (!this.loading) {
+      this.loading = fetch('lib/ocr/words.txt').then((r) => r.text()).then((t) => {
+        const rank = new Map();
+        let tier = 10;
+        for (const line of t.split('\n')) {
+          if (line[0] === '#') tier = Number(line.slice(1));
+          else if (line) rank.set(line, tier);
+        }
+        this.rank = rank;
+      }).catch(() => { this.rank = new Map(); });
+    }
+    return this.loading;
+  },
+
+  tier(w) { return this.rank.get(w.toLowerCase()); },
+  known(w) {
+    const l = w.toLowerCase();
+    return this.rank.has(l) || (this.seen.get(l) || 0) >= 3 || /^[ivxlcdm]+$/.test(l) && l.length <= 6;
+  },
+
+  CONFUSIONS: [['rn', 'm'], ['m', 'rn'], ['cl', 'd'], ['d', 'cl'], ['li', 'h'], ['h', 'li'], ['vv', 'w'], ['ii', 'u'], ['ri', 'n'],
+    ['1', 'l'], ['l', 'i'], ['i', 'l'], ['0', 'o'], ['5', 's'], ['c', 'e'], ['e', 'c'], ['u', 'n'], ['n', 'u'], ['tl', 'd'], ['fi', 'h'], ['f', 't'], ['t', 'f']],
+
+  /** The single best repair of one lower-case word, or null. */
+  repair(w) {
+    const best = (cands, maxTier) => {
+      const ok = [...new Set(cands)].filter((c) => this.rank.has(c)).map((c) => [c, this.rank.get(c)]).filter(([, t]) => t <= maxTier);
+      if (!ok.length) return null;
+      ok.sort((a, b) => a[1] - b[1]);
+      return ok.length === 1 || ok[0][1] < ok[1][1] ? ok[0][0] : null;   // a clear winner only
+    };
+    // 1. scanner confusions
+    const conf = [];
+    for (const [a, b] of this.CONFUSIONS) {
+      for (let i = w.indexOf(a); i >= 0; i = w.indexOf(a, i + 1)) conf.push(w.slice(0, i) + b + w.slice(i + a.length));
+    }
+    const c = best(conf, 50);
+    if (c) return c;
+    // 2. run-together words
+    const seg = this.split(w);
+    if (seg) return seg;
+    // 3. one wrong, missing or swapped letter (longer words only). Never drop letters: old spellings
+    //    such as "mediaeval" or "connexion" must survive, and scanners rarely add letters.
+    if (w.length >= 5) {
+      const edits = [];
+      const abc = 'abcdefghijklmnopqrstuvwxyz';
+      for (let i = 0; i <= w.length; i++) {
+        if (i < w.length - 1) edits.push(w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2));
+        for (const ch of abc) {
+          if (i < w.length) edits.push(w.slice(0, i) + ch + w.slice(i + 1));
+          edits.push(w.slice(0, i) + ch + w.slice(i));
+        }
+      }
+      return best(edits.filter((e) => e !== w), 40);
+    }
+    return null;
+  },
+
+  /** Split a run-together word into 2–3 common words, or null. */
+  split(w) {
+    if (w.length < 6) return null;
+    const good = (p) => (p.length >= 2 || p === 'a' || p === 'i') && (this.rank.get(p) || 99) <= (p.length <= 2 ? 20 : 50);
+    let found = null;
+    for (let i = 1; i < w.length; i++) {
+      const a = w.slice(0, i), rest = w.slice(i);
+      if (!good(a)) continue;
+      if (good(rest)) { if (!found || found.length > 2) found = [a, rest]; continue; }
+      for (let j = 1; j < rest.length; j++) {
+        const b = rest.slice(0, j), c = rest.slice(j);
+        if (good(b) && good(c) && !found) found = [a, b, c];
+      }
+    }
+    if (!found) return null;
+    return found.map((p) => (p === 'i' ? 'I' : p)).join(' ');
+  },
+
+  /** Repairs a paragraph of OCR text. */
+  fix(text) {
+    if (!this.rank || !this.rank.size) return text.replace(/([a-z])- (?=[a-z])/g, '$1');
+    // learn this book's vocabulary first (names, old spellings)
+    for (const m of text.toLowerCase().matchAll(/[a-z]{3,}/g)) this.seen.set(m[0], (this.seen.get(m[0]) || 0) + 1);
+    // words broken at a line end
+    text = text.replace(/\b([A-Za-z]+)- ([a-z]+)\b/g, (all, a, b) => {
+      const joined = a + b;
+      if (this.known(joined) || !(this.known(a) && this.known(b))) return joined;
+      return a + '-' + b;                       // a real compound word, like burgher-life
+    });
+    return text.replace(/[A-Za-z0-9]+(?:['’][a-z]+)?/g, (tok) => {
+      if (tok.length < 3 || /\d/.test(tok) && /^\d+$/.test(tok)) return tok;
+      if (/[A-Z]/.test(tok.slice(1)) || /^[A-Z]/.test(tok)) return tok;   // names, acronyms: leave alone
+      const core = tok.replace(/['’][a-z]+$/, '');
+      if (this.known(core)) return tok;
+      const r = this.repair(core.toLowerCase());
+      return r ? r + tok.slice(core.length) : tok;
+    });
   },
 };

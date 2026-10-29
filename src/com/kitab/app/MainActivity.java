@@ -69,8 +69,17 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
+        // Locked down: the page can only reach the app's own files and the Bridge below.
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
+        s.setAllowFileAccessFromFileURLs(false);
+        s.setAllowUniversalAccessFromFileURLs(false);
+        s.setJavaScriptCanOpenWindowsAutomatically(false);
+        s.setSupportMultipleWindows(false);
+        s.setGeolocationEnabled(false);
+        s.setSaveFormData(false);
+        if (Build.VERSION.SDK_INT >= 26) s.setSafeBrowsingEnabled(true);
+        WebView.setWebContentsDebuggingEnabled(false);
         s.setTextZoom(100);
         s.setSupportZoom(false);
         s.setMediaPlaybackRequiresUserGesture(false);
@@ -453,6 +462,15 @@ public class MainActivity extends Activity {
                 lp.screenBrightness = value < 0 ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                         : Math.max(0.01f, Math.min(1f, value));
                 getWindow().setAttributes(lp);
+            }});
+        }
+
+        /** Book pages cannot be screenshotted, screen-recorded or shown in the recent-apps preview while this is on. */
+        @JavascriptInterface
+        public void setSecure(final boolean on) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
             }});
         }
 

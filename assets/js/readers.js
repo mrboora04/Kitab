@@ -19,6 +19,7 @@ const FONTS = {
   sans: 'Roboto, "Noto Sans", system-ui, sans-serif',
   mono: '"Roboto Mono", "Droid Sans Mono", "Courier New", monospace',
 };
+FONTS.casual = '"Coming Soon", casual, "Comic Neue", "Comic Sans MS", cursive';
 FONTS.book = FONTS.serif;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
@@ -456,7 +457,7 @@ async function pdfLooksScanned(pdf) {
 
 /** Renders a page as a high-contrast greyscale image and reads it with OCR (results are cached on the phone). */
 async function ocrPageHtml(pdf, n, key, onStatus) {
-  const ck = `er.ocr2.${key}.${n}`;
+  const ck = `er.ocr3.${key}.${n}`;
   try { const hit = localStorage.getItem(ck); if (hit != null) return hit; } catch (e) { /* no cache */ }
   onStatus(`Scanning page ${n} of ${pdf.numPages}…`);
   const page = await pdf.getPage(n);

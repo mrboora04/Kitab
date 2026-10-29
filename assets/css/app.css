@@ -50,6 +50,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #navbar button span { font-size: 20px; filter: grayscale(1); opacity: .7; }
 #navbar button.on { color: var(--accent); font-weight: 600; }
 #navbar button.on span { filter: none; opacity: 1; }
+#pane-more .more-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 6px 16px 10px; margin-bottom: 14px; }
+#pane-more .more-card h3 { margin: 12px 0 4px; font: 700 16px system-ui, sans-serif; }
+#pane-more .set-row > label { width: 42%; }
+.center { text-align: center; }
+.accents { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+.accents button { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--panel); box-shadow: 0 0 0 1px var(--line); }
+.accents button.on { box-shadow: 0 0 0 3px var(--fg); }
+.accents [data-accent=ember] { background: #c45c34; } .accents [data-accent=ocean] { background: #2c79b0; }
+.accents [data-accent=forest] { background: #3c7a48; } .accents [data-accent=grape] { background: #7b4fb5; }
+.accents [data-accent=rose] { background: #d1477a; } .accents [data-accent=sunny] { background: #c98a0c; }
 
 .continue {
   display: flex; gap: 14px; align-items: center; padding: 14px; margin-bottom: 22px;
@@ -293,3 +303,78 @@ body.frame-on .page-frame .tv-wrap.paged { border-radius: 4px; }
 .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .tags:empty { display: none; }
 .tags em.note { color: var(--muted); font-weight: 500; }
+
+
+/* ---------- Accent colours (More → Colour) ---------- */
+body[data-accent="ocean"]  { --accent: #2c79b0; } body[data-accent="forest"] { --accent: #3c7a48; }
+body[data-accent="grape"]  { --accent: #7b4fb5; } body[data-accent="rose"]   { --accent: #d1477a; }
+body[data-accent="sunny"]  { --accent: #a8740a; }
+body[data-theme="dusk"][data-accent="ocean"], body[data-theme="night"][data-accent="ocean"]   { --accent: #6fb3e3; }
+body[data-theme="dusk"][data-accent="forest"], body[data-theme="night"][data-accent="forest"] { --accent: #7cc48a; }
+body[data-theme="dusk"][data-accent="grape"], body[data-theme="night"][data-accent="grape"]   { --accent: #b79af0; }
+body[data-theme="dusk"][data-accent="rose"], body[data-theme="night"][data-accent="rose"]     { --accent: #f08cb0; }
+body[data-theme="dusk"][data-accent="sunny"], body[data-theme="night"][data-accent="sunny"]   { --accent: #f2c14e; }
+
+/* ---------- Eye break ---------- */
+.eyebreak { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.eb-box { width: 100%; max-width: 360px; text-align: center; background: var(--panel); border-radius: 28px; padding: 28px 22px 24px; box-shadow: 0 20px 60px rgba(0,0,0,.25); border: 1px solid var(--line); }
+.eb-box h3 { margin: 14px 0 6px; font: 700 21px/1.25 Georgia, serif; }
+.eb-line { color: var(--muted); margin: 0 0 18px; font-size: 15px; line-height: 1.45; }
+.eb-eyes { display: flex; justify-content: center; gap: 14px; }
+.eb-eyes span { width: 46px; height: 46px; border-radius: 50%; background: #fff; border: 3px solid var(--fg); position: relative; animation: blink 4s infinite; }
+.eb-eyes span::after { content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--fg); top: 11px; left: 11px; animation: look 4s infinite; }
+@keyframes blink { 0%, 44%, 52%, 100% { transform: scaleY(1); } 48% { transform: scaleY(.08); } }
+@keyframes look { 0%, 20% { transform: translate(0, 0); } 30%, 60% { transform: translate(8px, -4px); } 70%, 100% { transform: translate(0, 0); } }
+.eb-actions { display: flex; flex-direction: column; gap: 10px; }
+.eb-count { position: relative; width: 120px; height: 120px; margin: 4px auto 0; }
+.eb-count svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.eb-count circle { fill: none; stroke: var(--line); stroke-width: 8; }
+.eb-count #ebRing { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.eb-count b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 30px system-ui, sans-serif; }
+
+/* ---------- Funky style (More → Style) ---------- */
+body.funky { --radius: 24px; }
+body.funky .lib-head h1 {
+  font: 400 34px/1.05 "Coming Soon", casual, "Comic Neue", cursive; letter-spacing: 0;
+  background: linear-gradient(100deg, var(--accent), #e8508f 55%, #7b4fb5); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+body.funky .btn.primary, body.funky .tool.on, body.funky .seg button.on, body.funky .chip.on {
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #e8508f));
+  color: #fff; border-color: transparent;
+}
+body.funky .btn, body.funky .chip, body.funky .seg, body.funky .stepper, body.funky .search input { border-width: 2px; }
+body.funky .chip { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+body.funky .cover { border-radius: 10px 16px 16px 10px; box-shadow: 0 2px 0 rgba(0,0,0,.15), 0 10px 22px color-mix(in srgb, var(--accent) 28%, transparent); transition: transform .2s; }
+body.funky .shelf .book:nth-child(3n+1) .cover { transform: rotate(-1.4deg); }
+body.funky .shelf .book:nth-child(3n+2) .cover { transform: rotate(1deg); }
+body.funky .shelf .book:active .cover { transform: scale(.96) rotate(0); }
+body.funky .continue, body.funky .source, body.funky #pane-more .more-card, body.funky .dialog-box, body.funky .eb-box { border-radius: var(--radius); border-width: 2px; }
+body.funky .continue { background: linear-gradient(135deg, var(--panel), color-mix(in srgb, var(--accent) 12%, var(--panel))); }
+body.funky .src-icon { background: color-mix(in srgb, var(--accent) 16%, var(--bg)); border-radius: 16px; }
+body.funky #navbar {
+  left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); height: 62px; border-radius: 31px; padding: 0 6px;
+  border: 2px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+body.funky #navbar button { border-radius: 24px; margin: 6px 2px; transition: background .2s; }
+body.funky #navbar button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+body.funky #navbar button span { filter: none; opacity: .85; }
+body.funky .pane { bottom: 0; padding-bottom: 96px; }
+body.funky .bar.top { margin: calc(8px + var(--top-safe)) 10px 0; border-radius: 22px; padding-top: 6px; }
+body.funky .bar.bottom { margin: 0 10px 10px; border-radius: 22px; }
+body.funky .sheet { border-radius: 28px 28px 0 0; }
+body.funky .sheet-grip { background: linear-gradient(90deg, var(--accent), #e8508f); height: 5px; width: 48px; }
+body.funky .li.item .thumb, body.funky .thumb { border-radius: 8px; }
+body.funky .empty-art { animation: bob 3s ease-in-out infinite; display: inline-block; }
+@keyframes bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
+@media (prefers-reduced-motion: reduce) { body.funky *, .eb-eyes span, .eb-eyes span::after { animation: none !important; transition: none !important; } }
+
+/* design pass: stacked settings rows in More, badges clear of the format label */
+#pane-more .set-row.stack { flex-wrap: wrap; gap: 8px; padding: 6px 0; }
+#pane-more .set-row.stack > label { width: 100%; }
+#pane-more .set-row.stack > .seg, #pane-more .set-row.stack > .accents, #pane-more .set-row.stack > .swatches { flex: 1 1 100%; }
+#pane-more .seg button { padding: 10px 4px; }
+#pane-more .swatches { justify-content: flex-start; gap: 10px; }
+.cover .badge { top: 6px; left: 6px; }
+.cover.badged .gen .type:first-child { padding-left: 24px; line-height: 22px; margin-top: -6px; }

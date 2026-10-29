@@ -65,12 +65,69 @@
     <div id="historyEmpty" class="empty hidden"><div class="empty-art">🕮</div><p>Books you read show up here.</p></div>
   </div>
 
+  <div id="pane-more" class="pane hidden">
+    <header class="lib-head"><div><h1>Make it yours</h1><p class="muted">Look, eye care and privacy</p></div></header>
+
+    <section class="more-card">
+      <h3>🎨 Look</h3>
+      <div class="set-row stack"><label>Style</label>
+        <div class="seg" data-setting="ui"><button data-v="classic">Classic</button><button data-v="funky">Funky</button></div></div>
+      <div class="set-row stack"><label>Colour</label>
+        <div class="accents" id="accentPicker">
+          <button data-accent="ember" title="Ember"></button><button data-accent="ocean" title="Ocean"></button>
+          <button data-accent="forest" title="Forest"></button><button data-accent="grape" title="Grape"></button>
+          <button data-accent="rose" title="Rose"></button><button data-accent="sunny" title="Sunny"></button>
+        </div></div>
+      <div class="set-row stack"><label>Theme</label>
+        <div class="swatches" id="themeSwatches2">
+          <button data-theme="paper" title="Paper">Aa</button><button data-theme="sepia" title="Sepia">Aa</button>
+          <button data-theme="mint" title="Mint">Aa</button><button data-theme="dusk" title="Dusk">Aa</button>
+          <button data-theme="night" title="Night">Aa</button>
+        </div></div>
+    </section>
+
+    <section class="more-card">
+      <h3>👀 Eye care</h3>
+      <div class="set-row stack"><label>Break reminder</label>
+        <div class="seg" data-setting="eyeEvery"><button data-v="0">Off</button><button data-v="20">20m</button><button data-v="30">30m</button><button data-v="45">45m</button><button data-v="60">1h</button></div></div>
+      <div class="set-row"><label>Insist after 2 skips</label><input type="checkbox" class="switch" data-setting="eyeInsist"></div>
+      <div class="set-row stack"><label>Rest time</label>
+        <div class="seg" data-setting="eyeRest"><button data-v="1">1 min</button><button data-v="2">2 min</button><button data-v="5">5 min</button></div></div>
+      <p class="hint">Kitab counts only the time you actually read. Every reminder suggests the 20-20-20 habit: every 20 minutes, look at something 20 feet away for 20 seconds.</p>
+    </section>
+
+    <section class="more-card">
+      <h3>🔒 Privacy</h3>
+      <div class="set-row"><label>Block screenshots of book pages</label><input type="checkbox" class="switch" data-setting="protect"></div>
+      <p class="hint">No ads, no account, no tracking. Kitab only uses the internet when you browse catalogs, and your books and notes never leave your phone.</p>
+    </section>
+
+    <p class="fineprint center">Kitab 1.2 · <a href="https://github.com/mrboora04/Kitab">github.com/mrboora04/Kitab</a></p>
+  </div>
+
   <nav id="navbar">
     <button data-tab="library" class="on"><span>📚</span>Library</button>
     <button data-tab="browse"><span>🌐</span>Browse</button>
     <button data-tab="history"><span>🕘</span>History</button>
+    <button data-tab="more"><span>✨</span>More</button>
   </nav>
+
+
 </section>
+
+<!-- Eye break -->
+<div id="eyeBreak" class="eyebreak hidden">
+  <div class="eb-box">
+    <div class="eb-eyes" aria-hidden="true"><span></span><span></span></div>
+    <h3 id="ebTitle">Time for an eye break</h3>
+    <p id="ebLine" class="eb-line"></p>
+    <div id="ebCount" class="eb-count hidden"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44"/><circle id="ebRing" cx="50" cy="50" r="44"/></svg><b id="ebNum">20</b></div>
+    <div class="eb-actions" id="ebActions">
+      <button class="btn primary" id="ebStart">Rest 20 seconds</button>
+      <button class="btn" id="ebSkip">5 more minutes</button>
+    </div>
+  </div>
+</div>
 
 <!-- Catalog book details -->
 <div id="sheetScrim" class="scrim top"></div>
@@ -155,7 +212,7 @@
       <div class="set-row">
         <label>Font</label>
         <div class="seg" data-setting="font">
-          <button data-v="serif">Serif</button><button data-v="sans">Sans</button><button data-v="mono">Mono</button><button data-v="book" class="epub-only">Book's</button>
+          <button data-v="serif">Serif</button><button data-v="sans">Sans</button><button data-v="mono">Mono</button><button data-v="casual">Fun</button><button data-v="book" class="epub-only">Book's</button>
         </div>
       </div>
       <div class="set-row">

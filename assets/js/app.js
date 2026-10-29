@@ -15,6 +15,7 @@ const DEFAULTS = {
   theme: 'paper', fontSize: 19, font: 'serif', lineHeight: 1.6, margin: 20, measure: 48, frame: true,
   flow: 'paged', pdfMode: 'page', pdfTrim: true, brightness: null, warmth: 0, ttsRate: 1,
   tapZones: true, volumeKeys: true, keepAwake: true, fullscreen: false,
+  ui: 'funky', accent: 'ember', eyeEvery: '30', eyeInsist: true, eyeRest: '2', protect: true,
 };
 const BAR_COLORS = { paper: '#fbf8f2', sepia: '#f1e6cf', mint: '#e2eddd', dusk: '#2a2b2f', night: '#000000' };
 const COVER_COLORS = [['#c45c34', '#7d3420'], ['#3c6e8f', '#1f3b52'], ['#4f7d4a', '#2b4a28'], ['#8a5a9e', '#4c2d5c'], ['#b0893a', '#6b511c'], ['#5d6470', '#2f343b']];
@@ -65,7 +66,7 @@ const App = {
 
   /* ---------------- startup ---------------- */
   init() {
-    try { Object.keys(localStorage).filter((k) => k.startsWith('er.ocr.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* older, lower-quality scans are re-read */ }
+    try { Object.keys(localStorage).filter((k) => k.startsWith('er.ocr.') || k.startsWith('er.ocr2.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* older, lower-quality scans are re-read */ }
     this.applySettings(true);
     this.bindLibrary();
     this.bindReader();
@@ -100,7 +101,7 @@ const App = {
   showTab(tab) {
     this.tab = tab;
     $$('#navbar [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-    ['library', 'browse', 'history'].forEach((t) => $('#pane-' + t).classList.toggle('hidden', t !== tab));
+    ['library', 'browse', 'history', 'more'].forEach((t) => $('#pane-' + t).classList.toggle('hidden', t !== tab));
     if (tab === 'library') this.renderLibrary();
     if (tab === 'history') this.renderHistory();
     if (tab === 'browse') Browse.renderSources();
@@ -126,7 +127,7 @@ const App = {
     const gen = `<div class="gen"><span class="type">${extOf(b.name).toUpperCase()}</span><span>${esc(m.title || prettyName(b.name))}</span><span class="type">${esc(m.author || '')}</span></div>`;
     const inner = m.cover ? `<img src="${esc(m.cover)}" alt="" onerror="this.closest('.cover').classList.remove('has-img');this.remove()">${gen}` : gen;
     const badge = this.state(b) === 'finished' ? '<span class="badge">✓</span>' : m.favorite ? '<span class="badge fav">★</span>' : '';
-    return `<div class="cover ${m.cover ? 'has-img' : ''}" style="--c1:${c1};--c2:${c2}">${inner}${badge}${pct && pct < 97 ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`;
+    return `<div class="cover ${m.cover ? 'has-img' : ''} ${badge ? 'badged' : ''}" style="--c1:${c1};--c2:${c2}">${inner}${badge}${pct && pct < 97 ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`;
   },
 
   sortMenu(anchor) {
@@ -275,8 +276,10 @@ const App = {
 
   /* ---------------- reader ---------------- */
   async openBook(name) {
+    if (EyeCare.resting()) return EyeCare.showRest();
     if (this.reader) await this.closeBook(true);
     busy(true, 'Opening…');
+    Native.setSecure && Native.setSecure(!!this.settings.protect);   // book pages are protected from screenshots
     this.name = name;
     this.meta = this.bookMeta(name);
     const type = extOf(name);
@@ -392,6 +395,7 @@ const App = {
 
   async closeBook(keepView) {
     this.stopTts();
+    Native.setSecure && Native.setSecure(false);
     this.saveNow();
     this.closePanels();
     if (this.reader) { try { this.reader.destroy(); } catch (e) { /* ignore */ } }
@@ -456,6 +460,7 @@ const App = {
   },
   async turn(dir) {
     if (!this.reader) return;
+    EyeCare.touch();
     if (this.tts) this.stopTts();
     const ok = await (dir > 0 ? this.reader.next() : this.reader.prev());
     if (!ok) toast(dir > 0 ? 'End of book' : 'Start of book');
@@ -467,6 +472,11 @@ const App = {
   },
 
   onBack() {
+    if (EyeCare.showing) {
+      if (!$('#ebActions').classList.contains('hidden')) EyeCare.skip();   // back = "later"
+      else if (!this.reader) EyeCare.close();                             // rest screen: dismiss, the lock stays
+      return true;                                                        // a closing countdown cannot be skipped
+    }
     if (this._dialogOpen) { this._dialogOpen(); return true; }
     if ($('#reader').classList.contains('hidden')) {
       if (document.querySelector('.menu')) { document.querySelector('.menu').remove(); return true; }
@@ -650,7 +660,8 @@ const App = {
 
   /* ---------------- settings ---------------- */
   bindSettings() {
-    $$('#themeSwatches button').forEach((b) => { b.onclick = () => this.set('theme', b.dataset.theme); });
+    $$('#themeSwatches button, #themeSwatches2 button').forEach((b) => { b.onclick = () => this.set('theme', b.dataset.theme); });
+    $$('#accentPicker button').forEach((b) => { b.onclick = () => this.set('accent', b.dataset.accent); });
     $$('[data-step]').forEach((b) => {
       b.onclick = () => this.set(b.dataset.step, clamp(this.settings[b.dataset.step] + Number(b.dataset.d), 12, 40));
     });
@@ -688,7 +699,10 @@ const App = {
     const s = this.settings;
     const root = document.documentElement.style;
     document.body.dataset.theme = s.theme;
+    document.body.dataset.accent = s.accent;
+    document.body.classList.toggle('funky', s.ui === 'funky');
     document.body.classList.toggle('flow-scroll', s.flow === 'scroll');
+    if (this.reader) Native.setSecure && Native.setSecure(!!s.protect);
     document.body.classList.toggle('frame-on', !!s.frame);
     root.setProperty('--rd-maxw', Number(s.measure) ? `calc(${s.measure}ch + ${s.frame ? 34 : 0}px)` : 'none');
     root.setProperty('--rd-size', s.fontSize + 'px');
@@ -697,7 +711,8 @@ const App = {
     root.setProperty('--rd-font', FONTS[s.font] || FONTS.serif);
     $('#warmth').style.opacity = s.warmth;
     $('#fontSizeVal').textContent = s.fontSize;
-    $$('#themeSwatches button').forEach((b) => b.classList.toggle('on', b.dataset.theme === s.theme));
+    $$('#themeSwatches button, #themeSwatches2 button').forEach((b) => b.classList.toggle('on', b.dataset.theme === s.theme));
+    $$('#accentPicker button').forEach((b) => b.classList.toggle('on', b.dataset.accent === s.accent));
     $$('.seg[data-setting]').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(s[seg.dataset.setting]))));
     $$('input[type=range][data-setting]').forEach((r) => {
       const v = s[r.dataset.setting];
@@ -715,4 +730,127 @@ const App = {
 };
 
 window.App = App;
-document.addEventListener('DOMContentLoaded', () => App.init());
+/*
+ * Eye care. Counts only real reading time (the book is open, the screen is on, you touched it in the
+ * last 3 minutes, and Kitab is not reading aloud). Every few minutes it suggests a 20-second break.
+ * Skip it twice and, if "Insist" is on, the next reminder closes the book for a short rest.
+ */
+const EyeCare = {
+  LINES: [
+    'Your eyes read every word for you. Give them twenty seconds.',
+    'Look at something far away. The story will wait.',
+    'Good stories wait. Good eyes last a lifetime.',
+    'Blink, breathe, look far. The book will be right here.',
+    'You only get one pair of eyes. Rest them a moment.',
+    'Every chapter feels better with rested eyes.',
+    'Find the farthest thing you can see and look at it.',
+  ],
+  state: Object.assign({ active: 0, skips: 0, at: 0, restUntil: 0 }, store.get('er.eye', {})),
+  lastInput: Date.now(),
+  showing: false,
+
+  save() { this.state.at = Date.now(); store.set('er.eye', this.state); },
+  touch() { this.lastInput = Date.now(); },
+  resting() { return Date.now() < (this.state.restUntil || 0); },
+
+  start() {
+    if (Date.now() - (this.state.at || 0) > 5 * 60000) { this.state.active = 0; this.state.skips = 0; }  // a real break happened
+    document.addEventListener('touchstart', () => this.touch(), { passive: true });
+    document.addEventListener('keydown', () => this.touch());
+    setInterval(() => this.tick(), 5000);
+    $('#ebStart').onclick = () => this.rest(20, false);
+    $('#ebSkip').onclick = () => this.skip();
+  },
+
+  tick() {
+    const every = Number(App.settings.eyeEvery) * 60000;
+    if (!App.reader || document.hidden || this.showing || App.tts) return;
+    const idle = Date.now() - this.lastInput;
+    if (idle > 5 * 60000) { this.state.active = 0; this.state.skips = 0; this.save(); return; }  // looked away long enough
+    if (idle < 3 * 60000) this.state.active += 5000;
+    this.save();
+    if (every && this.state.active >= every) this.prompt();
+  },
+
+  line() { return this.LINES[Math.floor(Math.random() * this.LINES.length)]; },
+
+  open(title, actions) {
+    this.showing = true;
+    $('#ebTitle').textContent = title;
+    $('#ebLine').textContent = this.line();
+    $('#ebActions').classList.toggle('hidden', !actions);
+    $('#ebCount').classList.add('hidden');
+    $('#eyeBreak').classList.remove('hidden');
+  },
+
+  close() {
+    this.showing = false;
+    clearInterval(this.countTimer);
+    $('#eyeBreak').classList.add('hidden');
+  },
+
+  prompt() {
+    if (App.settings.eyeInsist && this.state.skips >= 2) return this.insist();
+    const mins = Math.round(this.state.active / 60000);
+    this.open(`You've been reading for ${mins} minutes`, true);
+    $('#ebSkip').textContent = this.state.skips === 1 && App.settings.eyeInsist ? 'Last 5 minutes' : '5 more minutes';
+  },
+
+  skip() {
+    this.state.skips++;
+    this.state.active = Math.max(0, Number(App.settings.eyeEvery) * 60000 - 5 * 60000);   // ask again in 5 minutes
+    this.save();
+    this.close();
+  },
+
+  /** A countdown ring; when it ends the break counts as taken. */
+  countdown(secs, label, done) {
+    $('#ebActions').classList.add('hidden');
+    $('#ebCount').classList.remove('hidden');
+    const ring = $('#ebRing'), len = 2 * Math.PI * 44;
+    ring.style.strokeDasharray = len;
+    let left = secs;
+    const draw = () => { $('#ebNum').textContent = left; ring.style.strokeDashoffset = len * (1 - left / secs); $('#ebTitle').textContent = label(left); };
+    draw();
+    clearInterval(this.countTimer);
+    this.countTimer = setInterval(() => { left--; draw(); if (left <= 0) { clearInterval(this.countTimer); done(); } }, 1000);
+  },
+
+  rest(secs) {
+    this.countdown(secs, () => 'Look far away…', () => {
+      this.state.active = 0; this.state.skips = 0; this.save();
+      this.close();
+      toast('Welcome back 👀');
+    });
+  },
+
+  insist() {
+    this.open('Your eyes need a real rest', false);
+    this.countdown(15, (n) => `Closing the book in ${n}`, () => {
+      this.state.active = 0; this.state.skips = 0;
+      this.state.restUntil = Date.now() + Number(App.settings.eyeRest) * 60000;
+      this.save();
+      this.close();
+      App.closeBook();
+      this.showRest();
+    });
+  },
+
+  /** While resting, books stay closed; the rest of the app works. */
+  showRest() {
+    this.open('Resting your eyes', false);
+    $('#ebCount').classList.remove('hidden');
+    const tick = () => {
+      const left = Math.max(0, Math.ceil(((this.state.restUntil || 0) - Date.now()) / 1000));
+      $('#ebNum').textContent = left >= 60 ? Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : left;
+      $('#ebTitle').textContent = left ? 'Books open again in a moment' : 'Ready when you are';
+      if (!left) { clearInterval(this.countTimer); setTimeout(() => this.close(), 1200); }
+    };
+    tick();
+    clearInterval(this.countTimer);
+    this.countTimer = setInterval(tick, 1000);
+    $('#eyeBreak').onclick = (e) => { if (e.target.id === 'eyeBreak') this.close(); };   // tap outside to dismiss the reminder, the lock stays
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => { App.init(); EyeCare.start(); });
