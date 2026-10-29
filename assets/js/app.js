@@ -70,6 +70,7 @@ const App = {
     this.bindLibrary();
     this.bindReader();
     this.bindSettings();
+    Browse.init();
     this.renderLibrary();
   },
 
@@ -78,33 +79,90 @@ const App = {
   saveMeta() { if (this.name && this.meta) store.set(this.bookKey(this.name), this.meta); },
 
   /* ---------------- library ---------------- */
+  lib: Object.assign({ sort: 'recent', filter: 'all', query: '' }, store.get('er.lib', {})),
+  tab: 'library',
+
   bindLibrary() {
     $('#addBtn').onclick = () => Native.pickBook();
+    $('#searchBtn').onclick = () => {
+      const on = $('#libSearch').classList.toggle('hidden') === false;
+      if (on) $('#libQuery').focus(); else { this.lib.query = ''; $('#libQuery').value = ''; this.renderLibrary(); }
+    };
+    $('#libQuery').oninput = () => { this.lib.query = $('#libQuery').value.trim().toLowerCase(); this.renderLibrary(); };
+    $('#sortBtn').onclick = (e) => this.sortMenu(e.currentTarget);
+    $$('#filters [data-f]').forEach((b) => { b.onclick = () => { this.lib.filter = b.dataset.f; this.saveLib(); this.renderLibrary(); }; });
+    $$('#navbar [data-tab]').forEach((b) => { b.onclick = () => this.showTab(b.dataset.tab); });
+    $('#browseAddBtn').onclick = () => this.showTab('browse');
   },
+
+  saveLib() { store.set('er.lib', { sort: this.lib.sort, filter: this.lib.filter }); },
+
+  showTab(tab) {
+    this.tab = tab;
+    $$('#navbar [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+    ['library', 'browse', 'history'].forEach((t) => $('#pane-' + t).classList.toggle('hidden', t !== tab));
+    if (tab === 'library') this.renderLibrary();
+    if (tab === 'history') this.renderHistory();
+    if (tab === 'browse') Browse.renderSources();
+  },
+
+  hasBook(name) { return this.books().some((b) => b.name === name); },
 
   books() {
     let list = [];
     try { list = JSON.parse(Native.listBooks()); } catch (e) { /* none */ }
-    return list.map((b) => Object.assign(b, { meta: this.bookMeta(b.name) }))
-      .sort((a, b) => (b.meta.lastRead || b.added || 0) - (a.meta.lastRead || a.added || 0));
+    return list.map((b) => Object.assign(b, { meta: this.bookMeta(b.name) }));
+  },
+
+  state(b) {
+    const p = b.meta.progress || 0;
+    return b.meta.finished || p >= 0.97 ? 'finished' : p > 0 ? 'reading' : 'unread';
   },
 
   coverHtml(b) {
     const m = b.meta;
     const [c1, c2] = hashColor(b.name);
     const pct = Math.round((m.progress || 0) * 100);
-    const inner = m.cover
-      ? `<img src="${m.cover}" alt="">`
-      : `<div class="gen"><span class="type">${extOf(b.name).toUpperCase()}</span><span>${esc(m.title || prettyName(b.name))}</span><span class="type">${esc(m.author || '')}</span></div>`;
-    return `<div class="cover" style="--c1:${c1};--c2:${c2}">${inner}${pct ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`;
+    const gen = `<div class="gen"><span class="type">${extOf(b.name).toUpperCase()}</span><span>${esc(m.title || prettyName(b.name))}</span><span class="type">${esc(m.author || '')}</span></div>`;
+    const inner = m.cover ? `<img src="${esc(m.cover)}" alt="" onerror="this.closest('.cover').classList.remove('has-img');this.remove()">${gen}` : gen;
+    const badge = this.state(b) === 'finished' ? '<span class="badge">✓</span>' : m.favorite ? '<span class="badge fav">★</span>' : '';
+    return `<div class="cover ${m.cover ? 'has-img' : ''}" style="--c1:${c1};--c2:${c2}">${inner}${badge}${pct && pct < 97 ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`;
+  },
+
+  sortMenu(anchor) {
+    const opts = [['recent', 'Recently read'], ['added', 'Recently added'], ['title', 'Title A–Z'], ['progress', 'Progress']];
+    this.menu(anchor, opts.map(([v, t]) => `<button data-v="${v}">${this.lib.sort === v ? '✓ ' : ''}${t}</button>`).join(''), (el) => {
+      this.lib.sort = el.dataset.v; this.saveLib(); this.renderLibrary();
+    });
   },
 
   renderLibrary() {
-    const books = this.books();
-    $('#emptyState').classList.toggle('hidden', books.length > 0);
-    $('#libCount').textContent = books.length ? `${books.length} book${books.length > 1 ? 's' : ''}` : 'Your books';
-    const last = books.find((b) => b.meta.lastRead);
-    $('#continueWrap').innerHTML = last ? `
+    const all = this.books();
+    const q = this.lib.query;
+    const sorters = {
+      recent: (a, b) => (b.meta.lastRead || b.added || 0) - (a.meta.lastRead || a.added || 0),
+      added: (a, b) => (b.meta.addedAt || b.added || 0) - (a.meta.addedAt || a.added || 0),
+      title: (a, b) => (a.meta.title || a.name).localeCompare(b.meta.title || b.name),
+      progress: (a, b) => (b.meta.progress || 0) - (a.meta.progress || 0),
+    };
+    const f = this.lib.filter;
+    const books = all.filter((b) => {
+      if (q && !((b.meta.title || b.name) + ' ' + (b.meta.author || '')).toLowerCase().includes(q)) return false;
+      if (f === 'favorite') return !!b.meta.favorite;
+      return f === 'all' || this.state(b) === f;
+    }).sort(sorters[this.lib.sort] || sorters.recent);
+
+    $$('#filters [data-f]').forEach((b) => {
+      const n = all.filter((x) => (b.dataset.f === 'all' ? true : b.dataset.f === 'favorite' ? x.meta.favorite : this.state(x) === b.dataset.f)).length;
+      b.classList.toggle('on', b.dataset.f === f);
+      b.querySelector('i').textContent = n || '';
+    });
+    $('#emptyState').classList.toggle('hidden', all.length > 0);
+    $('#noMatch').classList.toggle('hidden', !all.length || books.length > 0);
+    $('#libCount').textContent = all.length ? `${all.length} book${all.length > 1 ? 's' : ''}` : 'Your books';
+    $('#filters').classList.toggle('hidden', !all.length);
+    const last = all.filter((b) => b.meta.lastRead && this.state(b) !== 'finished').sort(sorters.recent)[0];
+    $('#continueWrap').innerHTML = last && !q && f === 'all' ? `
       <button class="continue" data-open="${esc(last.name)}">
         ${this.coverHtml(last)}
         <div><div class="label">Continue reading</div><h3>${esc(last.meta.title || prettyName(last.name))}</h3>
@@ -117,33 +175,95 @@ const App = {
         <div class="title">${esc(b.meta.title || prettyName(b.name))}</div>
         <div class="meta">${b.meta.progress ? Math.round(b.meta.progress * 100) + '% · ' : ''}${ago(b.meta.lastRead)}</div>
       </div>`).join('');
-    $$('[data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
-    $$('[data-menu]').forEach((el) => { el.onclick = (e) => { e.stopPropagation(); this.bookMenu(el.dataset.menu, el); }; });
+    $$('#pane-library [data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
+    $$('#pane-library [data-menu]').forEach((el) => { el.onclick = (e) => { e.stopPropagation(); this.bookMenu(el.dataset.menu, el); }; });
   },
 
-  bookMenu(name, anchor) {
+  renderHistory() {
+    const books = this.books().filter((b) => b.meta.lastRead).sort((a, b) => b.meta.lastRead - a.meta.lastRead);
+    $('#historyEmpty').classList.toggle('hidden', books.length > 0);
+    $('#historyList').innerHTML = books.map((b) => `
+      <button class="row item" data-open="${esc(b.name)}">
+        <span class="thumb">${b.meta.cover ? `<img src="${esc(b.meta.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc((b.meta.title || b.name).slice(0, 1))}</i></span>
+        <span class="row-text"><b>${esc(b.meta.title || prettyName(b.name))}</b>
+          <small>${Math.round((b.meta.progress || 0) * 100)}% · ${ago(b.meta.lastRead)}</small>
+          <span class="mini"><i style="width:${Math.round((b.meta.progress || 0) * 100)}%"></i></span></span>
+      </button>`).join('');
+    $$('#historyList [data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
+    $('#clearHistory').classList.toggle('hidden', !books.length);
+    $('#clearHistory').onclick = async () => {
+      if (!(await this.dialog({ title: 'Clear history?', message: 'Your books and bookmarks stay. Reading positions are forgotten.', ok: 'Clear', danger: true }))) return;
+      this.books().forEach((b) => { const m = b.meta; delete m.lastRead; delete m.loc; m.progress = 0; store.set(this.bookKey(b.name), m); });
+      this.renderHistory();
+    };
+  },
+
+  /** Small popup list anchored to a button; onPick gets the chosen button. */
+  menu(anchor, html, onPick) {
     document.querySelectorAll('.menu').forEach((m) => m.remove());
     const m = document.createElement('div');
     m.className = 'menu';
-    m.innerHTML = '<button data-a="open">Open</button><button data-a="reset">Mark as unread</button><button data-a="del" class="danger">Remove from library</button>';
+    m.innerHTML = html;
     document.body.appendChild(m);
     const r = anchor.getBoundingClientRect();
-    m.style.top = Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 10) + 'px';
+    m.style.top = Math.max(10, Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 10)) + 'px';
     m.style.left = Math.max(10, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 10)) + 'px';
     const close = () => { m.remove(); document.removeEventListener('click', close, true); };
     setTimeout(() => document.addEventListener('click', close, true));
-    m.onclick = (e) => {
-      const a = e.target.dataset.a;
-      if (a === 'open') this.openBook(name);
-      if (a === 'reset') { const meta = this.bookMeta(name); delete meta.loc; meta.progress = 0; delete meta.lastRead; store.set(this.bookKey(name), meta); this.renderLibrary(); }
-      if (a === 'del' && confirm(`Remove “${prettyName(name)}” from Easy Reader? The original file on your phone is not touched.`)) {
-        Native.deleteBook(name);
-        store.del(this.bookKey(name));
-        store.del('er.locs.' + name);
-        this.renderLibrary();
-      }
-    };
+    m.onclick = (e) => { const b = e.target.closest('button'); if (b) onPick(b); };
   },
+
+  bookMenu(name, anchor) {
+    const meta = this.bookMeta(name);
+    const fin = meta.finished || (meta.progress || 0) >= 0.97;
+    this.menu(anchor,
+      `<button data-a="open">Open</button><button data-a="fav">${meta.favorite ? 'Remove from favourites' : 'Add to favourites'}</button>`
+      + `<button data-a="fin">${fin ? 'Mark as unread' : 'Mark as finished'}</button><button data-a="del" class="danger">Remove from library</button>`,
+      async (el) => {
+        const a = el.dataset.a;
+        if (a === 'open') this.openBook(name);
+        if (a === 'fav') { meta.favorite = !meta.favorite; store.set(this.bookKey(name), meta); this.renderLibrary(); }
+        if (a === 'fin') {
+          if (fin) { meta.finished = false; meta.progress = 0; delete meta.loc; delete meta.lastRead; } else { meta.finished = true; meta.progress = 1; }
+          store.set(this.bookKey(name), meta);
+          this.renderLibrary();
+        }
+        if (a === 'del' && await this.dialog({ title: `Remove “${meta.title || prettyName(name)}”?`, message: 'It is removed from Kitab only. Your original file is not touched.', ok: 'Remove', danger: true })) {
+          Native.deleteBook(name);
+          store.del(this.bookKey(name));
+          store.del('er.locs.' + name);
+          this.renderLibrary();
+        }
+      });
+  },
+
+  /** In-app dialog. Resolves to true / the typed text / null when cancelled. */
+  dialog({ title, message, input, ok, danger }) {
+    return new Promise((resolve) => {
+      const d = $('#dialog');
+      $('#dlgTitle').textContent = title || '';
+      $('#dlgMsg').textContent = message || '';
+      const field = $('#dlgInput');
+      field.classList.toggle('hidden', input == null);
+      field.value = input || '';
+      const okBtn = $('#dlgOk');
+      okBtn.textContent = ok || 'OK';
+      okBtn.classList.toggle('danger', !!danger);
+      d.classList.remove('hidden');
+      if (input != null) setTimeout(() => { field.focus(); field.select(); }, 50);
+      const done = (v) => { d.classList.add('hidden'); okBtn.onclick = $('#dlgCancel').onclick = null; this._dialogOpen = false; resolve(v); };
+      this._dialogOpen = () => done(null);
+      okBtn.onclick = () => done(input != null ? field.value : true);
+      $('#dlgCancel').onclick = () => done(null);
+    });
+  },
+
+  toast(m, ms) { toast(m, ms); },
+
+  /* Called from Java */
+  onHttp(r) { Opds.answer(r); },
+  onDownload(id, pct) { Browse.onDownload(id, pct); },
+  onDownloaded(id, name, err) { Browse.onDownloaded(id, name, err); },
 
   /* Called from Java */
   onImportStarted() { busy(true, 'Adding book…'); },
@@ -163,7 +283,7 @@ const App = {
     const url = 'books/' + encodeURIComponent(name);
     document.body.classList.toggle('is-pdf', type === 'pdf');
     document.body.classList.toggle('is-epub', type === 'epub');
-    $('#library').classList.add('hidden');
+    $('#home').classList.add('hidden');
     $('#reader').classList.remove('hidden', 'ui');
     $('#bookTitle').textContent = this.meta.title || prettyName(name);
     this.applySettings(true);
@@ -184,8 +304,8 @@ const App = {
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
         await this.reader.open(this.meta.loc);
-        if (this.reader.title) this.meta.title = this.reader.title;
-        if (this.reader.author) this.meta.author = this.reader.author;
+        if (this.reader.title && !this.meta.titleSet) this.meta.title = this.reader.title;
+        if (this.reader.author && !this.meta.titleSet) this.meta.author = this.reader.author;
         if (!this.meta.cover) this.epubCover();
       } else {
         this.reader = new TextReader($('#stage'), this, await textSource(url));
@@ -286,8 +406,8 @@ const App = {
     Native.setBrightness(-1);
     if (!keepView) {
       $('#reader').classList.add('hidden');
-      $('#library').classList.remove('hidden');
-      this.renderLibrary();
+      $('#home').classList.remove('hidden');
+      this.showTab(this.tab);
     }
   },
 
@@ -347,6 +467,13 @@ const App = {
   },
 
   onBack() {
+    if (this._dialogOpen) { this._dialogOpen(); return true; }
+    if ($('#reader').classList.contains('hidden')) {
+      if (document.querySelector('.menu')) { document.querySelector('.menu').remove(); return true; }
+      if (this.tab === 'browse' && Browse.back()) return true;
+      if (this.tab !== 'library') { this.showTab('library'); return true; }
+      return false;
+    }
     if (this.panelOpen()) { this.closePanels(); return true; }
     if (!$('#reader').classList.contains('hidden')) { this.closeBook(); return true; }
     if (document.querySelector('.menu')) { document.querySelector('.menu').remove(); return true; }
@@ -588,4 +715,4 @@ const App = {
 };
 
 window.App = App;
-App.init();
+document.addEventListener('DOMContentLoaded', () => App.init());

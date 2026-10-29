@@ -1,35 +1,43 @@
-# Kitab – Easy Reader (Android)
+# Kitab – Kitab (Android)
 
-A small (~7 MB) Android app for reading the books you've downloaded, with more comfortable
-settings than a plain PDF viewer. It works offline and asks for no permissions.
+A small (~8 MB) Android app for reading the books you've downloaded, with more comfortable
+settings than a plain PDF viewer. Reading works offline.
 
-**Download:** [`dist/EasyReader.apk`](dist/EasyReader.apk). Open it on your phone and allow
+**Download:** [`dist/Kitab.apk`](dist/Kitab.apk). Open it on your phone and allow
 "Install unknown apps" for your browser or file manager when Android asks.
 
 ## What it does
 
 | | |
 |---|---|
+| **Library** | Covers, % read, "Continue reading", search, sort (recent / added / title / progress), filters (All / Reading / Unread / Finished / ★ Favourites), favourites, mark finished |
+| **Browse** | Find free books inside the app: **Project Gutenberg** and **Standard Ebooks** (public domain) are built in, and you can add your own **Calibre / Calibre-Web / Kavita** library (or any OPDS catalog) by its address. Search, open a book's details, download EPUB or PDF straight into your library |
+| **History** | Everything you have read, newest first, with progress |
 | **Formats** | EPUB, PDF, TXT |
-| **Library** | Covers, % read, "Continue reading", remembers your page in every book |
 | **Themes** | Paper, Sepia, Mint, Dusk, Night (true black for OLED). Works on PDFs too |
-| **Text** | Size, font (serif / sans / mono / the book's own), line spacing, margins. Text is always left-aligned with whole words (no stretched spacing, no hyphen splits), line length (short / medium / long / full) and an optional bordered "page" that keeps text in a comfortable column |
-| **PDF "Text only" mode** | Pulls the text out of a PDF and reflows it so you can change size, font and spacing, the way you would in an EPUB. Switch back to "Original" for scanned books, comics or maths |
+| **Text** | Size, font (serif / sans / mono / the book's own), line spacing, margins, line length (short / medium / long / full), optional bordered "page". Text is always left-aligned with whole words: no stretched spacing, no hyphen splits |
 | **Scan text (OCR)** | For scanned or old books that are only page pictures: one tap turns them into readable, adjustable text. Cleans the page first (ignores ornaments, borders and drop-cap decoration but keeps the drop-cap letter). Offline, English, results saved on your phone. The app suggests it when it detects a scan |
-| **PDF "Original" mode** | Trims white margins so the text is bigger, zoom 100–400 %, page or continuous scroll |
+| **PDF "Text only" / "Original"** | Reflow a PDF's text like an EPUB, or keep the original pages with trimmed margins and zoom up to 400 % |
 | **Page turning** | Tap the screen edges, swipe, or use the volume keys. Scroll mode is also available |
 | **Navigation** | Table of contents, bookmarks, a progress slider to jump anywhere |
 | **Comfort** | In-app brightness, warm-light filter, keep screen on, full screen |
 | **Read aloud** | Reads the page with Android's text-to-speech and turns pages for you |
 
-Open a book with **+ Add book**, or tap a PDF/EPUB in your file manager or downloads and choose
-**Easy Reader**. The app keeps its own copy of the book, so its place in the library is not affected if you move the original file.
+Open a book with **+ Add**, or tap a PDF/EPUB in your file manager or downloads and choose
+**Kitab**. The app keeps its own copy of the book, so its place in the library is not affected if you move the original file.
+
+## Privacy and content
+
+- The only permission is **Internet**, used for the Browse tab. No accounts, no ads, no analytics, nothing is sent anywhere except the catalog requests you make.
+- Reading progress, bookmarks and scanned text stay on your phone.
+- Kitab does **not** include or link to sources of pirated books. The built-in catalogs offer public-domain books only. Catalogs you add yourself are your responsibility; use libraries you have the right to read.
 
 ## How it's built
 
 The UI is HTML/JS in [`assets/`](assets/), running in an Android WebView
-([`MainActivity.java`](src/com/easyreader/app/MainActivity.java)) that adds the native parts:
-file picking, the private library folder, text-to-speech, brightness and volume keys.
+([`MainActivity.java`](src/com/kitab/app/MainActivity.java)) that adds the native parts:
+file picking, the private library folder, catalog requests and downloads ([`Http.java`](src/com/kitab/app/Http.java)), text-to-speech, brightness and volume keys.
+Catalog browsing is [`opds.js`](assets/js/opds.js) and [`browse.js`](assets/js/browse.js).
 Rendering uses [epub.js](https://github.com/futurepress/epub.js) (BSD-2), [PDF.js](https://mozilla.github.io/pdf.js/)
 (Apache-2.0) and [JSZip](https://stuk.github.io/jszip/) (MIT), bundled in `assets/lib/`.
 

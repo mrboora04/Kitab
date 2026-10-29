@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/EasyReader.apk with only a JDK, Python 3 (+Pillow) and two jars from Maven Central:
+# Builds dist/Kitab.apk with only a JDK, Python 3 (+Pillow) and two jars from Maven Central:
 #   android-all.jar  (org.robolectric:android-all:10-robolectric-5803371, the Android 10 framework)
 #   dalvik-dx.jar    (com.jakewharton.android.repackaged:dalvik-dx:16.0.1, the dex compiler)
 # Set TOOLS to the folder holding them (downloaded automatically if missing) and
@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 TOOLS=${TOOLS:-.tools}
 KEYSTORE=${KEYSTORE:-$TOOLS/release.p12}
-STOREPASS=${STOREPASS:-easyreader}
+STOREPASS=${STOREPASS:-kitab-reader}
 BUILD=build
 mkdir -p "$TOOLS" dist
 
@@ -44,11 +44,11 @@ UNSIGNED="$BUILD/unsigned.apk"
 
 echo "== sign"
 if [ ! -f "$KEYSTORE" ]; then
-  keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$STOREPASS" -alias easyreader \
-    -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Easy Reader" >/dev/null 2>&1
+  keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$STOREPASS" -alias kitab \
+    -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Kitab" >/dev/null 2>&1
 fi
-cp "$UNSIGNED" dist/EasyReader.apk
+cp "$UNSIGNED" dist/Kitab.apk
 jarsigner -keystore "$KEYSTORE" -storepass "$STOREPASS" -sigalg SHA256withRSA -digestalg SHA-256 \
-  dist/EasyReader.apk easyreader >/dev/null
-jarsigner -verify dist/EasyReader.apk | tail -1
-ls -l dist/EasyReader.apk
+  dist/Kitab.apk kitab >/dev/null
+jarsigner -verify dist/Kitab.apk | tail -1
+ls -l dist/Kitab.apk

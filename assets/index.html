@@ -3,28 +3,92 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Easy Reader</title>
+<title>Kitab</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body data-theme="paper">
 
-<!-- Library -->
-<section id="library" class="view">
-  <header class="lib-head">
-    <div>
-      <h1>Easy Reader</h1>
-      <p class="muted" id="libCount">Your books</p>
+<!-- Home: Library / Browse / History -->
+<section id="home" class="view">
+  <div id="pane-library" class="pane">
+    <header class="lib-head">
+      <div>
+        <h1>Kitab</h1>
+        <p class="muted" id="libCount">Your books</p>
+      </div>
+      <div class="head-actions">
+        <button id="searchBtn" class="icon" aria-label="Search library">🔍</button>
+        <button id="sortBtn" class="icon" aria-label="Sort">⇅</button>
+        <button id="addBtn" class="btn primary">+ Add</button>
+      </div>
+    </header>
+    <div id="libSearch" class="search hidden"><input id="libQuery" type="search" placeholder="Search title or author" autocomplete="off"></div>
+    <div id="filters" class="chips hidden">
+      <button class="chip" data-f="all">All <i></i></button>
+      <button class="chip" data-f="reading">Reading <i></i></button>
+      <button class="chip" data-f="unread">Unread <i></i></button>
+      <button class="chip" data-f="finished">Finished <i></i></button>
+      <button class="chip" data-f="favorite">★ <i></i></button>
     </div>
-    <button id="addBtn" class="btn primary">+ Add book</button>
-  </header>
-  <div id="continueWrap"></div>
-  <div id="shelf" class="shelf"></div>
-  <div id="emptyState" class="empty hidden">
-    <div class="empty-art">📖</div>
-    <h2>No books yet</h2>
-    <p>Tap <b>Add book</b> and pick a PDF, EPUB or TXT file from your phone, or open one from your file manager with <b>Easy Reader</b>.</p>
+    <div id="continueWrap"></div>
+    <div id="shelf" class="shelf"></div>
+    <div id="noMatch" class="empty hidden"><p>No books match.</p></div>
+    <div id="emptyState" class="empty hidden">
+      <div class="empty-art">📖</div>
+      <h2>No books yet</h2>
+      <p><b>Add</b> a PDF, EPUB or TXT from your phone, or find free books in <b>Browse</b>.</p>
+      <p><button class="btn primary" id="browseAddBtn">Browse free books</button></p>
+    </div>
   </div>
+
+  <div id="pane-browse" class="pane hidden">
+    <div id="sourceView">
+      <header class="lib-head"><div><h1>Browse</h1><p class="muted">Free books from public-domain catalogs</p></div></header>
+      <div id="sourceList"></div>
+      <p class="fineprint">Catalogs listed here offer books that are free to read. You can also add your own Calibre, Calibre-Web or Kavita library by its OPDS address.</p>
+      <p><button class="btn" id="addSource">+ Add catalog</button></p>
+    </div>
+    <div id="feedView" class="hidden">
+      <header class="feed-head">
+        <button class="icon" id="feedBack" aria-label="Back">←</button>
+        <h2 id="feedTitle"></h2>
+      </header>
+      <form id="feedSearch" class="search hidden"><input id="feedQuery" type="search" placeholder="Search" autocomplete="off"></form>
+      <div id="feedStatus" class="status-box hidden"></div>
+      <div class="feed-scroll"><div id="feedList"></div><p><button class="btn wide hidden" id="feedMore">Load more</button></p></div>
+    </div>
+  </div>
+
+  <div id="pane-history" class="pane hidden">
+    <header class="lib-head"><div><h1>History</h1><p class="muted">Pick up where you left off</p></div><button id="clearHistory" class="btn hidden">Clear</button></header>
+    <div id="historyList"></div>
+    <div id="historyEmpty" class="empty hidden"><div class="empty-art">🕮</div><p>Books you read show up here.</p></div>
+  </div>
+
+  <nav id="navbar">
+    <button data-tab="library" class="on"><span>📚</span>Library</button>
+    <button data-tab="browse"><span>🌐</span>Browse</button>
+    <button data-tab="history"><span>🕘</span>History</button>
+  </nav>
 </section>
+
+<!-- Catalog book details -->
+<div id="sheetScrim" class="scrim top"></div>
+<aside id="bookSheet" class="sheet low">
+  <div class="sheet-grip"></div>
+  <button class="icon close" id="sheetClose" aria-label="Close">✕</button>
+  <div id="sheetBody"></div>
+</aside>
+
+<!-- Dialog -->
+<div id="dialog" class="dialog hidden">
+  <div class="dialog-box">
+    <h3 id="dlgTitle"></h3>
+    <p id="dlgMsg" class="muted"></p>
+    <input id="dlgInput" type="url" class="hidden" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="dialog-actions"><button class="btn" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>
+  </div>
+</div>
 
 <!-- Reader -->
 <section id="reader" class="view hidden">
@@ -160,6 +224,8 @@
 <script src="lib/pdf.min.js"></script>
 <script src="js/ocr.js"></script>
 <script src="js/readers.js"></script>
+<script src="js/opds.js"></script>
 <script src="js/app.js"></script>
+<script src="js/browse.js"></script>
 </body>
 </html>

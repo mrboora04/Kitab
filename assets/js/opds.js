@@ -1,0 +1,136 @@
+'use strict';
+/*
+ * OPDS catalog support (the open standard used by Project Gutenberg, Standard Ebooks, Calibre, Calibre-Web, Kavita, ...).
+ *   Opds.parse(xmlText, baseUrl) -> { title, entries[], next, search }
+ * An entry is either a folder ({ nav: url }) or a book ({ title, authors, summary, cover, formats[], detail }).
+ * All requests go through the native bridge (window.Android.httpGet) because a web page may not read other sites.
+ */
+const Opds = (() => {
+  const REL_ACQ = 'http://opds-spec.org/acquisition';
+  const REL_IMG = 'http://opds-spec.org/image';
+  const REL_THUMB = 'http://opds-spec.org/image/thumbnail';
+
+  const pending = {};
+  let counter = 0;
+
+  /** Called by the app when the native side answers. */
+  function answer(r) {
+    const cb = pending[r.id];
+    delete pending[r.id];
+    if (cb) cb(r);
+  }
+
+  function fetchText(url) {
+    return new Promise((resolve, reject) => {
+      const id = 'h' + (++counter);
+      const timer = setTimeout(() => { delete pending[id]; reject(new Error('The catalog took too long to answer')); }, 45000);
+      pending[id] = (r) => {
+        clearTimeout(timer);
+        if (r.status >= 200 && r.status < 300) resolve(r);
+        else reject(new Error(r.status ? `The catalog answered ${r.status}` : (r.error || 'No internet connection')));
+      };
+      if (window.Android && Android.httpGet) Android.httpGet(id, url);
+      else answer({ id, status: 0, error: 'Needs the Android app' });
+    });
+  }
+
+  const abs = (href, base) => { try { return new URL(href, base).toString(); } catch (e) { return ''; } };
+  const text = (el, tag) => { const n = el.getElementsByTagName(tag)[0]; return n ? n.textContent.trim() : ''; };
+  const clean = (html) => {
+    const d = new DOMParser().parseFromString(html || '', 'text/html');
+    return (d.body.textContent || '').replace(/\s+/g, ' ').trim();
+  };
+
+  function links(el, base) {
+    return Array.from(el.children).filter((c) => c.localName === 'link').map((l) => ({
+      rel: l.getAttribute('rel') || '', type: l.getAttribute('type') || '', href: abs(l.getAttribute('href') || '', base),
+      title: l.getAttribute('title') || '', length: l.getAttribute('length') || '',
+    })).filter((l) => l.href);
+  }
+
+  const isAcq = (l) => l.rel.indexOf(REL_ACQ) === 0;
+  const isImage = (l) => l.rel === REL_IMG || l.rel === REL_THUMB || l.rel === 'x-stanza-cover-image' || l.rel === 'x-stanza-cover-image-thumbnail';
+
+  function formatOf(l) {
+    const t = l.type.toLowerCase();
+    if (t.includes('epub')) return 'EPUB';
+    if (t.includes('pdf')) return 'PDF';
+    return null;
+  }
+
+  /** Readable formats first; EPUB with images before plain EPUB. */
+  function rankFormats(list) {
+    return list.sort((a, b) => (a.format === b.format ? (b.score - a.score) : (a.format === 'EPUB' ? -1 : 1)));
+  }
+
+  function parseEntry(e, base) {
+    const ls = links(e, base);
+    const authors = Array.from(e.getElementsByTagName('author')).map((a) => text(a, 'name')).filter(Boolean);
+    const formats = [];
+    for (const l of ls.filter(isAcq)) {
+      const f = formatOf(l);
+      if (!f) continue;
+      let score = 0;
+      if (/images/.test(l.href) || /\.images/.test(l.title)) score += 2;
+      if (/epub3|epub\.noimages/.test(l.href) === false && f === 'EPUB') score += 1;
+      if (/noimages/.test(l.href)) score -= 1;
+      formats.push({ format: f, url: l.href, size: l.length, score });
+    }
+    const thumb = ls.find((l) => l.rel === REL_THUMB) || ls.find(isImage);
+    const title = text(e, 'title') || 'Untitled';
+    const summary = clean(text(e, 'content') || text(e, 'summary'));
+    const entry = {
+      id: text(e, 'id'), title, authors, summary,
+      cover: thumb ? thumb.href : '',
+      formats: rankFormats(formats),
+    };
+    if (!entry.formats.length) {
+      // Gutenberg-style feeds list books without download links; the full entry is one more request away
+      const detail = ls.find((l) => /application\/atom\+xml/.test(l.type) && /entry/.test(l.type))
+        || ls.find((l) => l.rel === 'alternate' && /atom|opds/.test(l.type));
+      const nav = ls.find((l) => l.rel === 'subsection' || l.rel === 'http://opds-spec.org/sort/new' || l.rel === 'http://opds-spec.org/sort/popular'
+        || l.rel === 'http://opds-spec.org/featured' || (/atom\+xml/.test(l.type) && /kind=(navigation|acquisition)/.test(l.type)) || l.rel === 'start');
+      if (nav && !detail) return { title, summary, nav: nav.href, authors };
+      if (detail) entry.detail = detail.href;
+      else if (nav) return { title, summary, nav: nav.href, authors };
+    }
+    return entry;
+  }
+
+  function parse(xml, base) {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('This address is not an OPDS catalog');
+    const root = doc.documentElement;
+    if (root.localName === 'entry') return { title: text(root, 'title'), entries: [parseEntry(root, base)], single: true };
+    if (root.localName !== 'feed') throw new Error('This address is not an OPDS catalog');
+    const ls = links(root, base);
+    const next = ls.find((l) => l.rel === 'next');
+    const search = ls.find((l) => l.rel === 'search');
+    const entries = Array.from(root.children).filter((c) => c.localName === 'entry').map((e) => parseEntry(e, base));
+    return { title: text(root, 'title'), entries, next: next && next.href, search: search && { href: search.href, type: search.type } };
+  }
+
+  /** Fills in a search URL from an OpenSearch template. */
+  const fillTemplate = (tpl, q) => tpl.replace(/(\{|%7B)searchTerms\??(\}|%7D)/gi, encodeURIComponent(q)).replace(/(\{|%7B)[^}%]+(\}|%7D)/gi, '');
+
+  async function searchUrl(source, feed, q) {
+    if (source && source.search) return fillTemplate(source.search, q);
+    const s = feed && feed.search;
+    if (!s) return null;
+    if (/opensearchdescription/.test(s.type)) {
+      const r = await fetchText(s.href);
+      const d = new DOMParser().parseFromString(r.body, 'application/xml');
+      const urls = Array.from(d.getElementsByTagName('Url'));
+      const u = urls.find((x) => /atom|opds/.test(x.getAttribute('type') || '')) || urls[0];
+      return u ? fillTemplate(abs(u.getAttribute('template'), r.url), q) : null;
+    }
+    return fillTemplate(s.href, q);
+  }
+
+  async function load(url) {
+    const r = await fetchText(url);
+    return Object.assign(parse(r.body, r.url), { url: r.url });
+  }
+
+  return { load, parse, answer, searchUrl, fetchText };
+})();

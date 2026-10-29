@@ -1,4 +1,4 @@
-package com.easyreader.app;
+package com.kitab.app;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
 
     WebView web;
     File booksDir;
+    File coversDir;
     TextToSpeech tts;
     boolean ttsReady;
     boolean volumeKeys = true;
@@ -59,6 +60,8 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         booksDir = new File(getFilesDir(), "books");
         booksDir.mkdirs();
+        coversDir = new File(getFilesDir(), "covers");
+        coversDir.mkdirs();
 
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#f7f3ea"));
@@ -71,6 +74,7 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setSupportZoom(false);
         s.setMediaPlaybackRequiresUserGesture(false);
+        if (Build.VERSION.SDK_INT >= 21) s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);  // catalog covers can be plain http
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
@@ -127,7 +131,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** "Open with Easy Reader" from a file manager or browser download. */
+    /** "Open with Kitab" from a file manager or browser download. */
     void handleIntent(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
         try {
@@ -200,6 +204,7 @@ public class MainActivity extends Activity {
         MIME.put("bcmap", "application/octet-stream");
         MIME.put("pfb", "application/octet-stream");
         MIME.put("ttf", "font/ttf");
+        MIME.put("jpg", "image/jpeg");
     }
 
     /** Serves the bundled UI from assets/ and the library from /books/. */
@@ -214,7 +219,12 @@ public class MainActivity extends Activity {
         headers.put("Cache-Control", "no-cache");
         try {
             InputStream in;
-            if (path.startsWith("/books/")) {
+            if (path.startsWith("/covers/")) {
+                File f = new File(coversDir, path.substring("/covers/".length()));
+                if (!f.getCanonicalPath().startsWith(coversDir.getCanonicalPath())) throw new Exception("bad path");
+                in = new FileInputStream(f);
+                mime = "image/jpeg";
+            } else if (path.startsWith("/books/")) {
                 File f = new File(booksDir, path.substring("/books/".length()));
                 if (!f.getCanonicalPath().startsWith(booksDir.getCanonicalPath())) throw new Exception("bad path");
                 in = new FileInputStream(f);
@@ -308,6 +318,8 @@ public class MainActivity extends Activity {
             File[] files = booksDir.listFiles();
             if (files != null) {
                 for (File f : files) {
+                    String n = f.getName().toLowerCase(Locale.ROOT);
+                    if (!n.endsWith(".pdf") && !n.endsWith(".epub") && !n.endsWith(".txt")) continue;
                     try {
                         arr.put(new JSONObject().put("name", f.getName()).put("size", f.length())
                                 .put("added", f.lastModified()));
@@ -321,7 +333,68 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean deleteBook(String name) {
             File f = new File(booksDir, name);
+            new File(coversDir, name + ".jpg").delete();
             return f.getParentFile().equals(booksDir) && f.delete();
+        }
+
+        /** GET a catalog page. The answer arrives as App.onHttp({id, status, url, type, body, error}). */
+        @JavascriptInterface
+        public void httpGet(final String id, final String url) {
+            new Thread(new Runnable() { public void run() {
+                JSONObject out = new JSONObject();
+                try {
+                    out.put("id", id);
+                    Http.Result r = Http.get(url, 6 << 20);
+                    out.put("status", r.status).put("url", r.url).put("type", r.contentType == null ? "" : r.contentType)
+                            .put("body", new String(r.body, "UTF-8"));
+                } catch (Exception e) {
+                    try { out.put("status", 0).put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { }
+                }
+                final String json = out.toString();
+                runOnUiThread(new Runnable() { public void run() { js("window.App && App.onHttp(" + json + ")"); }});
+            }}).start();
+        }
+
+        /** Downloads an EPUB/PDF into the library. Progress: App.onDownload(id, percent); done: App.onDownloaded(id, name, error). */
+        @JavascriptInterface
+        public void downloadBook(final String id, final String url, final String title, final String coverUrl) {
+            new Thread(new Runnable() { public void run() {
+                String savedName = null, error = null;
+                try {
+                    String base = title.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", " ").replaceAll("\\s+", " ").trim();
+                    if (base.length() > 80) base = base.substring(0, 80).trim();
+                    if (base.isEmpty()) base = "book";
+                    final File tmp = new File(booksDir, "dl-" + System.nanoTime());
+                    final long[] last = {0};
+                    Http.Result r = Http.download(url, tmp, 300L << 20, new Http.Progress() {
+                        public void onProgress(long done, long total) {
+                            long now = System.currentTimeMillis();
+                            if (total > 0 && now - last[0] > 250) {
+                                last[0] = now;
+                                final int pct = (int) (done * 100 / total);
+                                runOnUiThread(new Runnable() { public void run() { js("window.App && App.onDownload(" + JSONObject.quote(id) + "," + pct + ")"); }});
+                            }
+                        }
+                    });
+                    String ext = Http.extensionFor(r.contentType, r.url);
+                    if (ext == null) { tmp.delete(); throw new Exception("This file type is not supported (EPUB or PDF only)"); }
+                    File dest = new File(booksDir, base + ext);
+                    if (dest.exists()) dest.delete();
+                    if (!tmp.renameTo(dest)) { tmp.delete(); throw new Exception("Could not save the book"); }
+                    savedName = dest.getName();
+                    if (coverUrl != null && coverUrl.length() > 0) {
+                        try {
+                            Http.download(coverUrl, new File(coversDir, savedName + ".jpg"), 5L << 20, null);
+                        } catch (Exception ignored) { /* the app draws a cover itself */ }
+                    }
+                } catch (Exception e) {
+                    error = String.valueOf(e.getMessage());
+                }
+                final String n = savedName, err = error;
+                runOnUiThread(new Runnable() { public void run() {
+                    js("window.App && App.onDownloaded(" + JSONObject.quote(id) + "," + (n == null ? "null" : JSONObject.quote(n)) + "," + (err == null ? "null" : JSONObject.quote(err)) + ")");
+                }});
+            }}).start();
         }
 
         @JavascriptInterface
