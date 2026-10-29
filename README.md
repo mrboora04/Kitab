@@ -18,10 +18,11 @@ settings than a plain PDF viewer. Reading works offline.
 | **Text** | Size, font (serif / sans / mono / the book's own), line spacing, margins, line length (short / medium / long / full), optional bordered "page". Text is always left-aligned with whole words: no stretched spacing, no hyphen splits |
 | **Scan text (OCR)** | For scanned or old books that are only page pictures: one tap turns them into readable, adjustable text. Cleans the page first (ignores ornaments, borders and drop-cap decoration but keeps the drop-cap letter). Offline, English, results saved on your phone. The app suggests it when it detects a scan |
 | **PDF "Text only" / "Original"** | Reflow a PDF's text like an EPUB, or keep the original pages with trimmed margins and zoom up to 400 % |
+| **Clean reading screen** | While reading you only see the book. Tap the middle for back, bookmark, contents and settings; Listen, Scan text, zoom and all reading options live in Settings (Aa) |
 | **Page turning** | Tap the screen edges, swipe, or use the volume keys. Scroll mode is also available |
 | **Navigation** | Table of contents, bookmarks, a progress slider to jump anywhere |
 | **Comfort** | In-app brightness, warm-light filter, keep screen on, full screen |
-| **Read aloud** | Reads the page with Android's text-to-speech and turns pages for you |
+| **Read aloud** | Reads the page with Android's text-to-speech and turns pages for you. Start it from Settings; tap the page to stop |
 
 Open a book with **+ Add**, or tap a PDF/EPUB in your file manager or downloads and choose
 **Kitab**. The app keeps its own copy of the book, so its place in the library is not affected if you move the original file.

@@ -140,11 +140,11 @@ const Browse = {
     const frag = entries.map((e, i) => {
       const idx = (append ? view.drawn : 0) + i;
       if (e.nav) {
-        return `<button class="row nav" data-nav="${idx}"><span class="folder">📁</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
+        return `<button class="li nav" data-nav="${idx}"><span class="folder">📁</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
       }
       const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
       const have = this.have(e);
-      return `<button class="row item" data-book="${idx}">
+      return `<button class="li item" data-book="${idx}">
         <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
         <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', '))}</small>${fmt ? `<em>${fmt}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}</span></button>`;
     }).join('');
@@ -237,7 +237,7 @@ const Browse = {
     const dl = Object.values(this.downloads).find((d) => d.entry === e);
     const have = this.have(e);
     const buttons = dl
-      ? `<button class="btn primary wide" disabled>Downloading… ${dl.pct}%</button><div class="bar"><i style="width:${dl.pct}%"></i></div>`
+      ? `<button class="btn primary wide" disabled>Downloading… ${dl.pct}%</button><div class="dlbar"><i style="width:${dl.pct}%"></i></div>`
       : have
         ? `<button class="btn primary wide" id="readNow">Read now</button>`
         : e.formats.length

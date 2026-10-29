@@ -111,13 +111,6 @@
       <button class="icon" id="nextBtn" aria-label="Next page">›</button>
     </div>
     <div class="row small"><span id="progressLabel">0%</span></div>
-    <div class="row chips">
-      <span id="zoomBox" class="hidden">
-        <button class="chip" id="zoomOut">−</button><span id="zoomLabel">100%</span><button class="chip" id="zoomIn">+</button>
-      </span>
-      <button class="chip pdf-only" id="ocrBtn">📝 Scan text</button>
-      <button class="chip" id="ttsBtn">🔊 Listen</button>
-    </div>
   </footer>
 
   <!-- Contents & bookmarks -->
@@ -134,6 +127,15 @@
   <!-- Settings -->
   <aside id="settingsPanel" class="sheet">
     <div class="sheet-grip"></div>
+    <div class="tools">
+      <button class="tool" id="ttsBtn"><span>🔊</span>Listen</button>
+      <button class="tool pdf-only" id="ocrBtn"><span>📝</span>Scan text</button>
+    </div>
+    <p class="hint pdf-only" id="ocrHint">Scan text reads the page pictures of a scanned or old book (English, offline) so you get real text you can resize. The first page takes a little longer; results are saved on your phone.</p>
+    <div class="set-row pdf-only pdf-page-only">
+      <label>Zoom</label>
+      <div class="stepper"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomLabel">100%</span><button id="zoomIn" aria-label="Zoom in">+</button></div>
+    </div>
     <div class="set-row">
       <label>Theme</label>
       <div class="swatches" id="themeSwatches">
@@ -191,10 +193,6 @@
       </div>
     </div>
 
-    <div class="set-group pdf-only">
-      <div class="set-row"><button class="btn primary" id="ocrBtn2" style="width:100%">📝 Scan text (for scanned or old books)</button></div>
-      <p class="hint">Reads the page pictures with OCR (English) so you get real, adjustable text. The first page takes a little longer; results are saved on your phone.</p>
-    </div>
     <div class="set-row">
       <label>Brightness</label>
       <input type="range" min="0.02" max="1" step="0.02" data-setting="brightness">

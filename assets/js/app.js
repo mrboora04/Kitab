@@ -183,7 +183,7 @@ const App = {
     const books = this.books().filter((b) => b.meta.lastRead).sort((a, b) => b.meta.lastRead - a.meta.lastRead);
     $('#historyEmpty').classList.toggle('hidden', books.length > 0);
     $('#historyList').innerHTML = books.map((b) => `
-      <button class="row item" data-open="${esc(b.name)}">
+      <button class="li item" data-open="${esc(b.name)}">
         <span class="thumb">${b.meta.cover ? `<img src="${esc(b.meta.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc((b.meta.title || b.name).slice(0, 1))}</i></span>
         <span class="row-text"><b>${esc(b.meta.title || prettyName(b.name))}</b>
           <small>${Math.round((b.meta.progress || 0) * 100)}% · ${ago(b.meta.lastRead)}</small>
@@ -336,9 +336,8 @@ const App = {
     const ocr = !!this.meta.ocr;
     const reflow = ocr || this.settings.pdfMode === 'reflow';
     document.body.classList.toggle('pdf-reflow', reflow);
-    $('#zoomBox').classList.toggle('hidden', reflow);
     $('#ocrBtn').classList.toggle('on', ocr);
-    $('#ocrBtn').textContent = ocr ? '📄 Original' : '📝 Scan text';
+    $('#ocrBtn').innerHTML = ocr ? '<span>📄</span>Original pages' : '<span>📝</span>Scan text';
     if (reflow) {
       const src = await pdfTextSource(this.pdf, {
         ocr, key: this.name,
@@ -442,6 +441,7 @@ const App = {
   /* ---------------- navigation & gestures ---------------- */
   onTap(x) {
     if (this.panelOpen()) return this.closePanels();
+    if (this.tts) { this.stopTts(); toast('Stopped listening'); return; }   // tap anywhere to stop
     const ui = $('#reader').classList.contains('ui');
     if (this.settings.tapZones && !ui) {
       if (x < 0.28) return this.turn(-1);
@@ -503,9 +503,9 @@ const App = {
       this.onRelocated();
     };
     $('#bookmarkBtn').onclick = () => this.toggleBookmark();
-    $('#ttsBtn').onclick = () => (this.tts ? this.stopTts() : this.startTts());
-    $('#ocrBtn').onclick = () => this.toggleOcr();
-    $('#ocrBtn2').onclick = () => { this.closePanels(); this.toggleOcr(true); };
+    // reading tools live in the settings sheet; they close it so you land back on the page
+    $('#ttsBtn').onclick = () => { if (this.tts) this.stopTts(); else { this.closePanels(); this.startTts(); } };
+    $('#ocrBtn').onclick = () => { this.closePanels(); this.toggleOcr(); };
     $('#zoomIn').onclick = () => this.zoom(0.25);
     $('#zoomOut').onclick = () => this.zoom(-0.25);
     document.addEventListener('keydown', (e) => {
@@ -623,7 +623,7 @@ const App = {
   async startTts() {
     if (!Native.canSpeak()) { toast('Text-to-speech is not available. Install or enable a voice in Android settings.'); return; }
     this.tts = true;
-    $('#ttsBtn').textContent = '⏸ Stop';
+    $('#ttsBtn').innerHTML = '<span>⏸</span>Stop listening';
     $('#ttsBtn').classList.add('on');
     this.toggleUi(false);
     this.speakPage();
@@ -644,7 +644,7 @@ const App = {
     if (!this.tts) return;
     this.tts = false;
     Native.stopSpeaking();
-    $('#ttsBtn').textContent = '🔊 Listen';
+    $('#ttsBtn').innerHTML = '<span>🔊</span>Listen';
     $('#ttsBtn').classList.remove('on');
   },
 
