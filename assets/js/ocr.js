@@ -12,7 +12,9 @@
 const OCR = {
   worker: null,
   loading: null,
-  queue: Promise.resolve(),
+  jobs: [],          // pages waiting to be scanned: { key, label, high, run, promise }
+  current: null,     // the page being scanned right now
+  onChange: null,    // the app shows "scanning page N" in Aa
 
   init() {
     if (!this.loading) {
@@ -40,18 +42,101 @@ const OCR = {
     return this.loading;
   },
 
-  /** Reads one page image and returns HTML paragraphs. */
-  pageHtml(canvas) {
-    const job = this.queue.then(async () => {
-      await this.init();
-      const pre = this.clean(canvas);
-      const { data } = await this.worker.recognize(pre.canvas);
-      const caps = await this.readDropCaps(pre.caps);
-      await Words.load();
-      return this.layout(data, caps, pre.medH);
+  /**
+   * Queues one page. Pages are scanned one at a time; the page you are looking at (high) jumps the line,
+   * read-ahead pages wait at the back. A failing page is retried 3 times with a fresh scanner.
+   */
+  schedule(key, label, run, high) {
+    if (this.current && this.current.key === key) return this.current.promise;
+    const waiting = this.jobs.find((j) => j.key === key);
+    if (waiting) { if (high) this.promote(key); return waiting.promise; }
+    const job = { key, label, run, high };
+    job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+    if (high) this.jobs.unshift(job); else this.jobs.push(job);
+    this.pump();
+    return job.promise;
+  },
+
+  /** Drops waiting pages of a book you closed, so they never hold up the next one. */
+  cancel(prefix) {
+    const cur = this.current;
+    if (cur && cur.key.startsWith(prefix)) {        // the page in progress belongs to a closed book: let go of it now
+      cur.cancelled = true;
+      const e = new Error('cancelled'); e.reason = 'cancelled';
+      cur.reject(e);
+      this.current = null;
+      setTimeout(() => this.pump());
+    }
+    this.jobs = this.jobs.filter((j) => {
+      if (!j.key.startsWith(prefix)) return true;
+      const e = new Error('cancelled'); e.reason = 'cancelled';
+      j.reject(e);
+      return false;
     });
-    this.queue = job.catch(() => {});
-    return job;
+    this.changed();
+  },
+
+  promote(key) {
+    const i = this.jobs.findIndex((j) => j.key === key);
+    if (i > 0) this.jobs.unshift(this.jobs.splice(i, 1)[0]);
+    if (i >= 0) this.jobs[0].high = true;
+  },
+
+  async pump() {
+    if (this.current || !this.jobs.length) { this.changed(); return; }
+    const job = (this.current = this.jobs.shift());
+    this.changed();
+    let err = null;
+    for (let attempt = 1; attempt <= 3 && !job.cancelled; attempt++) {
+      try {
+        const out = await this.timeout(job.run(), 120000);
+        if (!job.cancelled) job.resolve(out);
+        err = null;
+        break;
+      } catch (e) {
+        err = e;
+        if (!job.cancelled) await this.reset();  // a crashed scanner stays broken: start a fresh one
+      }
+    }
+    if (job.cancelled) return;                   // already let go of; the next page is running
+    if (err) job.reject(this.explain(err));
+    this.current = null;
+    this.pump();
+  },
+
+  changed() { if (this.onChange) this.onChange(this.current && this.current.label, this.jobs.length); },
+
+  timeout(p, ms) {
+    return Promise.race([p, new Promise((_, bad) => setTimeout(() => bad(new Error('timeout')), ms))]);
+  },
+
+  async reset() {
+    try { if (this.worker) await this.worker.terminate(); } catch (e) { /* already gone */ }
+    this.worker = null;
+    this.loading = null;
+  },
+
+  /** A plain reason for a page that could not be scanned. */
+  explain(e) {
+    const m = String(e && (e.message || e));
+    let reason = 'the scanner stopped unexpectedly';
+    if (/timeout/i.test(m)) reason = 'it took too long (a very large or complex page)';
+    else if (/memory|allocation|out of bounds/i.test(m)) reason = 'your phone ran low on memory';
+    else if (/missing|load|fetch|network/i.test(m)) reason = 'the scanner could not start';
+    const err = new Error(reason);
+    err.reason = reason;
+    err.detail = m.slice(0, 200);
+    return err;
+  },
+
+  /** Reads one page image and returns HTML paragraphs (call through schedule). */
+  async read(canvas) {
+    await this.init();
+    const pre = this.clean(canvas);
+    const { data } = await this.worker.recognize(pre.canvas);
+    const caps = await this.readDropCaps(pre.caps);
+    await Words.load();
+    return this.layout(data, caps, pre.medH);
   },
 
   /* ---------------- 1 + 2: clean the image ---------------- */
@@ -166,6 +251,13 @@ const OCR = {
         caps.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, variants });
       }
     }
+    // A drop cap sits at the left, above the bottom of the page. More than two candidates means pictures, not a letter.
+    // Shapes nested inside each other (a letter in a wreath of rings) count as one; keep the innermost.
+    const inside = (a, b) => a !== b && a.x0 >= b.x0 && a.y0 >= b.y0 && a.x1 <= b.x1 && a.y1 <= b.y1;
+    const groups = caps.filter((c) => c.x0 < w * 0.4 && c.y0 < h * 0.8)
+      .filter((c, _, all) => !all.some((o) => inside(o, c)));        // innermost of each nest
+    caps.length = 0;
+    if (groups.length <= 2) caps.push(...groups.sort((a, b) => a.y0 - b.y0).slice(0, 1));
     for (let i = 0; i < n; i++) if (ink[i]) out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = 0;
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
@@ -185,6 +277,7 @@ const OCR = {
           const { data } = await this.worker.recognize(cv);
           const t = (data.text || '').trim();
           if (/^[A-Z]$/.test(t) && data.confidence >= 78 && (!best || data.confidence > best.conf)) best = { letter: t, conf: data.confidence };
+          if (best) break;                       // found it: skip the second try
         }
         if (best) found.push({ letter: best.letter, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
       }

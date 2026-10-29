@@ -84,6 +84,7 @@ const App = {
     this.bindReader();
     this.bindSettings();
     Browse.init();
+    OCR.onChange = (label, waiting) => this.showScanState(label, waiting);
     this.renderLibrary();
   },
 
@@ -373,8 +374,12 @@ const App = {
       const src = await pdfTextSource(this.pdf, {
         scanned: !!this.meta.scanned, key: this.name,
         onStatus: (msg) => {
-          if (msg) busy(true, msg, OCR.worker ? '' : 'Starting the text reader (first time only)…');
-          else if (this._opening !== true) busy(false);
+          // a scan may hold the screen for 5 seconds at most; after that it carries on in the background
+          clearTimeout(this._scanT);
+          if (msg) {
+            busy(true, msg, OCR.worker ? '' : 'Starting the scanner (first time only)…');
+            this._scanT = setTimeout(() => this.onScanSlow(), 5000);
+          } else if (this._opening !== true) busy(false);
         },
       });
       this.reader = new TextReader($('#stage'), this, src);
@@ -422,6 +427,7 @@ const App = {
   },
 
   async closeBook(keepView) {
+    if (this.name) OCR.cancel(this.name + ':');
     this.stopTts();
     if (this.hlMode) this.toggleHl(false);
     Native.setSecure && Native.setSecure(false);
@@ -595,6 +601,22 @@ const App = {
     this.renderHighlights();
     const curBtn = $('#tocList .current');
     if (curBtn) setTimeout(() => curBtn.scrollIntoView({ block: 'center' }), 50);
+  },
+
+  /* ---------------- scanning in the background ---------------- */
+  onScanSlow() {
+    clearTimeout(this._scanT);
+    if ($('#busy').classList.contains('hidden')) return;
+    busy(false);
+    toast('Still scanning in the background. You can keep reading; progress is in Aa.', 4000);
+  },
+
+  /** Aa shows what the scanner is doing: "Scanning page 12 · 2 waiting", or nothing when it is idle. */
+  showScanState(label, waiting) {
+    const el = $('#scanState');
+    if (!el) return;
+    el.classList.toggle('hidden', !label);
+    if (label) el.innerHTML = `<span class="mini-spin"></span> Scanning ${esc(label)}${waiting ? ` · ${waiting} more waiting` : ''}`;
   },
 
   /* ---------------- highlights ---------------- */

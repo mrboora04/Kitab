@@ -82,6 +82,13 @@ class TextReader {
     this.wrap.appendChild(this.tv);
     this.frame = makeFrame(stage, this.wrap);
     attachGestures(this.frame, app, () => this.paged);
+    this.tv.addEventListener('click', (e) => {   // "Try again" on a page that could not be scanned
+      const b = e.target.closest('[data-retry]');
+      if (!b) return;
+      e.stopPropagation();
+      if (this.src.forget) this.src.forget(this.s);
+      this.show(this.s, { c: 0 });
+    });
     this.wrap.addEventListener('scroll', () => {
       if (this.paged) return;
       this.fill();                                   // keep the parts above and below loaded: one long scroll
@@ -115,8 +122,24 @@ class TextReader {
   async show(s, at) {
     s = clamp(s, 0, this.src.count - 1);
     const token = (this._token = {});
-    const html = await this.src.load(s);
+    const loading = this.src.load(s);
+    const SLOW = {};
+    let html = await Promise.race([loading, new Promise((r) => setTimeout(() => r(SLOW), 5000))]);
     if (token !== this._token) return;
+    if (html === SLOW) {
+      // Taking long: show the page picture now, swap in the text when it is ready. Nothing is blocked.
+      const preview = this.src.preview ? await this.src.preview(s) : '';
+      if (token !== this._token) return;
+      this.s = s;
+      this.tv.innerHTML = this.secHtml(s, `<div class="scan-wait"><p class="notice">📝 Turning this page into text… read the page meanwhile.</p>${preview}</div>`);
+      this.secEl = this.tv.firstElementChild;
+      this.layout();
+      this.paged ? this.setPage(0) : (this.wrap.scrollTop = 0);
+      this.app.onScanSlow && this.app.onScanSlow();
+      this.app.onRelocated();
+      loading.then(() => { if (token === this._token) this.show(s, at); });
+      return;
+    }
     this.s = s;
     this.tv.innerHTML = this.secHtml(s, html);
     this.secEl = this.tv.firstElementChild;
@@ -609,22 +632,37 @@ async function pdfLooksScanned(pdf) {
 }
 
 /** Renders a page as a high-contrast greyscale image and reads it with OCR (results are cached on the phone). */
-async function ocrPageHtml(pdf, n, key, onStatus) {
+async function ocrPageHtml(pdf, n, key, onStatus, quiet) {
   const ck = `er.ocr3.${key}.${n}`;
   try { const hit = localStorage.getItem(ck); if (hit != null) return hit; } catch (e) { /* no cache */ }
-  onStatus(`Scanning page ${n} of ${pdf.numPages}…`);
-  const page = await pdf.getPage(n);
-  const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(1800 / base.width, 2600 / base.height, 4);  // enough detail for print, light on phone memory
-  const vp = page.getViewport({ scale });
-  const raw = document.createElement('canvas');
-  raw.width = Math.floor(vp.width); raw.height = Math.floor(vp.height);
-  const rctx = raw.getContext('2d');
-  rctx.fillStyle = '#fff'; rctx.fillRect(0, 0, raw.width, raw.height);
-  await page.render({ canvasContext: rctx, viewport: vp }).promise;
-  const html = await OCR.pageHtml(raw);  // cleans the page, reads it, rebuilds paragraphs
-  try { localStorage.setItem(ck, html); } catch (e) { /* storage full: it will just be scanned again */ }
-  return html;
+  if (!quiet) onStatus(`Scanning page ${n} of ${pdf.numPages}…`);
+  try {
+    const html = await OCR.schedule(`${key}:${n}`, `page ${n}`, async () => {
+      const page = await pdf.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(1600 / base.width, 2300 / base.height, 4);  // enough detail for print, quick on a phone
+      const vp = page.getViewport({ scale });
+      const raw = document.createElement('canvas');
+      raw.width = Math.floor(vp.width); raw.height = Math.floor(vp.height);
+      const rctx = raw.getContext('2d');
+      rctx.fillStyle = '#fff'; rctx.fillRect(0, 0, raw.width, raw.height);
+      await page.render({ canvasContext: rctx, viewport: vp }).promise;
+      return OCR.read(raw);                       // cleans the page, reads it, rebuilds paragraphs
+    }, !quiet);
+    try { localStorage.setItem(ck, html); } catch (e) { /* storage full: it will just be scanned again */ }
+    return html;
+  } catch (e) {
+    return scanFailedHtml(n, e);                  // not saved, so it is tried again next time
+  }
+}
+
+/** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
+function scanFailedHtml(n, e) {
+  const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
+  const body = `Kitab 1.3.1 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
+  return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
+    <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
 }
 
 /**
@@ -640,18 +678,41 @@ async function pdfTextSource(pdf, opts) {
   const pending = new Map();
   const toLoc = (page) => ({ s: Math.floor((page - 1) / per), anchor: 'pg-' + page, page });
   // Use the PDF's own text; a page without real text (a scan or a picture) is read with OCR instead.
-  const pageHtml = async (n, status) => {
+  const pageHtml = async (n, status, quiet) => {
     if (!opts.scanned) {
       const html = await pdfPageHtml(await pdf.getPage(n), n);
       if (html.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length >= 40) return html;
     }
-    return ocrPageHtml(pdf, n, opts.key, status);
+    return ocrPageHtml(pdf, n, opts.key, status, quiet);
   };
   const load = (i, silent) => {
     if (cache.has(i)) return Promise.resolve(cache.get(i));
     if (!pending.has(i)) pending.set(i, build(i, silent).finally(() => pending.delete(i)));
-    else if (!silent) { onStatus('Scanning page…'); return pending.get(i).finally(() => onStatus(null)); }
+    else if (!silent) {                          // already being read ahead: move it to the front of the line
+      for (let n = i * per + 1; n <= Math.min(pdf.numPages, (i + 1) * per); n++) OCR.promote(`${opts.key}:${n}`);
+      onStatus('Scanning page…');
+      return pending.get(i).finally(() => onStatus(null));
+    }
     return pending.get(i);
+  };
+  // Read ahead only the next two parts of a scanned book, never the whole book.
+  const ahead = (i) => { if (opts.scanned) for (const j of [i + 1, i + 2]) if (j < count && !cache.has(j)) load(j, true).catch(() => {}); };
+  // While a page is being scanned you can already read its picture.
+  const previewHtml = async (i) => {
+    const out = [];
+    for (let n = i * per + 1; n <= Math.min(pdf.numPages, (i + 1) * per, i * per + 2); n++) {
+      try {
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: 900 / page.getViewport({ scale: 1 }).width });
+        const c = document.createElement('canvas');
+        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        out.push(`<img class="scan-preview" src="${c.toDataURL('image/jpeg', 0.7)}" alt="Page ${n}">`);
+      } catch (e) { /* no preview */ }
+    }
+    return out.join('');
   };
   const build = async (i, silent) => {
     const status = silent ? () => {} : onStatus;
@@ -659,7 +720,7 @@ async function pdfTextSource(pdf, opts) {
     let words = 0;
     try {
       for (let n = i * per + 1; n <= Math.min(pdf.numPages, (i + 1) * per); n++) {
-        const html = await pageHtml(n, status);
+        const html = await pageHtml(n, status, silent);
         words += html.length;
         parts.push(`<div class="pmark" id="pg-${n}">— ${n} —</div>`, html);
       }
@@ -668,10 +729,10 @@ async function pdfTextSource(pdf, opts) {
     const html = words < 20 ? parts.join('\n') + `<p class="notice">${hint}</p>` : parts.join('\n');
     cache.set(i, html);
     if (cache.size > 8) cache.delete(cache.keys().next().value);
-    if (opts.scanned && i + 1 < count) setTimeout(() => load(i + 1, true).catch(() => {}), 50);  // read ahead quietly while you read
     return html;
   };
-  return { count, weights: Array.from({ length: count }, (_, i) => Math.min(per, pdf.numPages - i * per)), load: (i) => load(i, false), quiet: (i) => load(i, true), toc: await pdfToc(pdf, toLoc), pdf, perSection: per, toLoc };
+  return { count, weights: Array.from({ length: count }, (_, i) => Math.min(per, pdf.numPages - i * per)), load: (i) => load(i, false).then((h) => { if (!/scan-fail/.test(h)) ahead(i); return h; }), quiet: (i) => load(i, true),
+    forget: (i) => cache.delete(i), preview: (i) => previewHtml(i), toc: await pdfToc(pdf, toLoc), pdf, perSection: per, toLoc };
 }
 
 /* ======================================================================

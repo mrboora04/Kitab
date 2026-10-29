@@ -414,3 +414,13 @@ body.hl-mode .tv p, body.hl-mode .tv h2 { -webkit-user-select: text; user-select
 .pdf-wrap.paged.zoomed { display: block; padding: 50vh 30vw; }
 .pdf-wrap.paged.zoomed .pdf-page { margin: 0; }
 #dlgPass { margin-top: 10px; }
+
+/* ---------- Background scanning ---------- */
+.scan-state { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.mini-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; flex: none; }
+.tv .scan-wait .notice { padding: 10px 0 14px; text-indent: 0; }
+.tv .scan-preview { display: block; max-width: 100%; max-height: calc(100% - 70px); margin: 0 auto 16px; border-radius: 6px; box-shadow: 0 1px 6px rgba(0,0,0,.15); filter: var(--pdf-filter); }
+.tv-wrap.scroll .scan-preview { max-height: none; }
+.tv .scan-fail { text-indent: 0; text-align: center; padding: 24px 8px; color: var(--muted); font-family: system-ui, sans-serif; font-size: 15px; }
+.tv .scan-fail p { text-indent: 0; }
+.tv .scan-fail .chip { display: inline-block; margin: 6px 4px; text-decoration: none; color: var(--fg); }
