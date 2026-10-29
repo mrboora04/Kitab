@@ -37,26 +37,28 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 
 ---
 
-## What it does
+## How to use Kitab
 
-| | |
-|---|---|
-| **Library** | Covers, % read, "Continue reading", search, sort (recent / added / title / progress), filters (All / Reading / Unread / Finished / ★ Favourites), favourites, mark finished |
-| **Browse** | Find free books inside the app: **Project Gutenberg** and **Standard Ebooks** (public domain) are built in, and you can add your own **Calibre / Calibre-Web / Kavita** library (or any OPDS catalog) by its address. Search, open a book's details, download EPUB or PDF straight into your library |
-| **History** | Everything you have read, newest first, with progress |
-| **Formats** | EPUB, PDF, TXT |
-| **Themes** | Paper, Sepia, Mint, Dusk, Night (true black for OLED). Works on PDFs too |
-| **Text** | Size, font (serif / sans / mono / the book's own), line spacing, margins, line length (short / medium / long / full), optional bordered "page". Text is always left-aligned with whole words: no stretched spacing, no hyphen splits |
-| **Scan text (OCR)** | For scanned or old books that are only page pictures: one tap turns them into readable, adjustable text. Cleans the page first (ignores ornaments, borders and drop-cap decoration but keeps the drop-cap letter). Offline, English, results saved on your phone. The app suggests it when it detects a scan |
-| **PDF "Text only" / "Original"** | Reflow a PDF's text like an EPUB, or keep the original pages with trimmed margins and zoom up to 400 % |
-| **Clean reading screen** | While reading you only see the book. Tap the middle for back, bookmark, contents and settings; Listen, Scan text, zoom and all reading options live in Settings (Aa) |
-| **Page turning** | Tap the screen edges, swipe, or use the volume keys. Scroll mode is also available |
-| **Navigation** | Table of contents, bookmarks, a progress slider to jump anywhere |
-| **Comfort** | In-app brightness, warm-light filter, keep screen on, full screen |
-| **Read aloud** | Reads the page with Android's text-to-speech and turns pages for you. Start it from Settings; tap the page to stop |
+**1. Find a book.**
+Tap **Browse**, pick a catalog, search anything. Tap a cover, tap Download. It's yours, free.
 
-Open a book with **+ Add**, or tap a PDF/EPUB in your file manager or downloads and choose
-**Kitab**. The app keeps its own copy of the book, so its place in the library is not affected if you move the original file.
+**2. Or bring your own.**
+Tap **+ Add** and pick any EPUB, PDF or TXT from your phone.
+
+**3. Just read.**
+Tap the edges to turn pages. Tap the middle for the menu. That's all.
+
+**4. Make it feel right.**
+Tap **Aa**. Pick a theme, a font, a size. Night mode is true black.
+
+**5. Got an old scanned book?**
+Tap **Aa**, then **Scan text**. The page pictures become real text you can resize.
+
+**6. Eyes tired?**
+Tap **Aa**, then **Listen**. Kitab reads to you and turns the pages. Tap the screen to stop.
+
+**7. Come back any time.**
+Kitab remembers where you stopped, in every book. Open the app, tap **Continue reading**.
 
 ## Privacy and content
 
