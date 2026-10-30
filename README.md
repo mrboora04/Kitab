@@ -58,7 +58,7 @@ Tap **Aa**, then **Text only**. Kitab scans the whole book once, in the backgrou
 Tap **Aa**, then **Listen**. Slide the 🐢—🐇 bar for the speed you like. Tap the screen to stop.
 
 **7. Mark what matters.**
-Tap 🖍, then tap any sentence (or select a few words). Find them all later under ☰ → Highlights.
+Press and hold a word and drag to select, then pick a colour (or underline, copy, add a note). Or tap the select button at the top and tap a sentence. Tap a highlight to change or remove it. Find them all under ☰ → Highlights.
 
 **8. Come back any time.**
 Kitab remembers where you stopped, in every book. Open the app, tap **Continue reading**.

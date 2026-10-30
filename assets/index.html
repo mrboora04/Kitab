@@ -158,7 +158,7 @@
   <header id="topbar" class="bar top">
     <button class="icon" id="backBtn" aria-label="Back to library">←</button>
     <div class="bar-title"><b id="bookTitle"></b><small id="chapterTitle"></small></div>
-    <button class="icon" id="hlBtn" aria-label="Highlighter">🖍</button>
+    <button class="icon" id="hlBtn" aria-label="Select text"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" stroke-dasharray="3.2 3"/><path d="M9.5 7h5M9.5 17h5M12 7v10"/></svg></button>
     <button class="icon" id="tocBtn" aria-label="Contents">☰</button>
     <button class="icon" id="settingsBtn" aria-label="Reading settings">Aa</button>
   </header>
@@ -272,6 +272,12 @@
 </section>
 
 <div id="busy" class="busy hidden"><div class="spinner"></div><p id="busyText">Opening…</p><p class="status" id="busyNote"></p></div>
+<div id="hlBar" class="hlbar hidden" role="toolbar" aria-label="Highlight">
+  <div class="sw">
+    <button class="c" data-c="y" aria-label="Yellow"></button><button class="c" data-c="g" aria-label="Green"></button><button class="c" data-c="b" aria-label="Blue"></button><button class="c" data-c="p" aria-label="Pink"></button><button class="c u" data-c="u" aria-label="Underline">U</button>
+  </div>
+  <div class="acts"><button data-a="copy">Copy</button><button data-a="note">Note</button><button data-a="del" class="danger">Remove</button></div>
+</div>
 <div id="toast" class="toast"></div>
 
 <script src="lib/jszip.min.js"></script>

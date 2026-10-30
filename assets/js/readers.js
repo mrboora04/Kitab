@@ -412,34 +412,54 @@ class TextReader {
   /* --- highlights: { id, s, a, b } character ranges inside part s --- */
   paint(sec) {
     const s = Number(sec.dataset.s);
-    for (const h of this.app.highlights()) if (h.s === s && h.a != null) markRange(sec, h.a, h.b, h.id);
+    for (const h of this.app.highlights()) if (h.s === s && h.a != null) markRange(sec, h.a, h.b, h.id, h.c);
   }
 
   addMark(h) {
     const sec = this.tv.querySelector(`.sec[data-s="${h.s}"]`);
-    if (sec) markRange(sec, h.a, h.b, h.id);
+    if (sec) markRange(sec, h.a, h.b, h.id, h.c);
   }
 
   removeMark(id) { unmark(this.tv, id); }
 
-  /** A tap in highlight mode: the sentence under the finger, or an existing highlight to remove. */
-  highlightAt(x, y) {
+  /** A tap that lands on an existing highlight: its id and where it is on screen. */
+  markAt(x, y) {
     const hit = document.elementFromPoint(x, y);
     const mk = hit && hit.closest && hit.closest('mark.hl');
-    if (mk) return { remove: mk.dataset.h };
+    if (!mk) return null;
+    const r = mk.getBoundingClientRect();
+    return { id: mk.dataset.h, rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right } };
+  }
+
+  /** Selects the sentence under the finger (the reader can then drag the handles to change it). */
+  selectAt(x, y) {
     const r = this.caretAt(x, y);
-    if (!r) return null;
+    if (!r) return false;
     this.pick(r.startContainer);
     const block = r.startContainer.parentElement.closest('p, h2, li, blockquote');
-    if (!block || !this.secEl.contains(block)) return null;
+    if (!block || !this.secEl.contains(block)) return false;
     const nodes = textNodesOf(block);
-    if (!nodes.length) return null;
-    const base = this.offsetOf(nodes[0][0], 0);
-    const at = this.offsetOf(r.startContainer, r.startOffset) - base;
+    const at = nodes.reduce((acc, [n, pos]) => (n === r.startContainer ? pos + r.startOffset : acc), 0);
     const [a, b] = sentenceAround(block.textContent, at);
-    if (b <= a) return null;
-    return { s: this.s, a: base + a, b: base + b, text: block.textContent.slice(a, b).trim() };
+    if (b <= a) return false;
+    const range = document.createRange();
+    for (const [n, pos] of nodes) if (a >= pos && a <= pos + n.length) { range.setStart(n, a - pos); break; }
+    for (const [n, pos] of nodes) if (b >= pos && b <= pos + n.length) { range.setEnd(n, b - pos); break; }
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return true;
   }
+
+  /** The current selection, with where it is on screen (null when nothing is selected). */
+  selectionInfo() {
+    const h = this.selectionHighlight();
+    if (!h) return null;
+    const rg = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    return { h, rect: { top: rg.top, bottom: rg.bottom, left: rg.left, right: rg.right } };
+  }
+
+  clearSelection() { window.getSelection().removeAllRanges(); }
 
   /** The current text selection as a highlight (then the selection is cleared). */
   selectionHighlight() {
@@ -450,9 +470,9 @@ class TextReader {
     this.pick(r.startContainer);
     const a = this.offsetOf(r.startContainer, r.startOffset);
     const text = r.toString();
-    let b = r.endContainer.nodeType === 3 && this.secEl.contains(r.endContainer) ? this.offsetOf(r.endContainer, r.endOffset) : a + text.length;
+    let b = r.endContainer.nodeType === 3 && this.secEl.contains(r.endContainer) ? this.offsetOf(r.endContainer, r.endOffset) : (this.textNodes(), this._len);
     if (b <= a) return null;
-    return { s: this.s, a, b, text: text.replace(/\s+/g, ' ').trim() };
+    return { s: this.s, a, b, text: this.secEl.textContent.slice(a, b).replace(/\s+/g, ' ').trim() };
   }
 
   relayout() {
@@ -494,7 +514,7 @@ function sentenceAround(text, at) {
 }
 
 /** Wraps characters [a, b) of `root`'s text in <mark class="hl" data-h="id">. */
-function markRange(root, a, b, id) {
+function markRange(root, a, b, id, c) {
   for (const [n, pos] of textNodesOf(root)) {
     const start = Math.max(a, pos), end = Math.min(b, pos + n.length);
     if (start >= end || !n.data.slice(start - pos, end - pos).trim()) continue;
@@ -504,6 +524,7 @@ function markRange(root, a, b, id) {
     const m = (root.ownerDocument || document).createElement('mark');
     m.className = 'hl';
     m.dataset.h = id;
+    if (c) m.dataset.c = c;
     target.parentNode.insertBefore(m, target);
     m.appendChild(target);
   }
@@ -1106,16 +1127,20 @@ class EpubReader {
     });
     // Highlighter: select text, or tap a sentence; tap a highlight to remove it.
     r.on('selected', (cfiRange, contents) => {
-      if (!this.app.hlMode) return;
       const sel = contents.window.getSelection();
       const text = String(sel || '').replace(/\s+/g, ' ').trim();
-      if (text) this.app.addHighlight({ cfi: cfiRange, text });
-      sel.removeAllRanges();
+      if (!text || !sel.rangeCount) return;
+      const rg = sel.getRangeAt(0).getBoundingClientRect();
+      const fr = contents.window.frameElement.getBoundingClientRect();
+      this._sel = sel;
+      this.app.showHlBar({ top: rg.top + fr.top, bottom: rg.bottom + fr.top, left: rg.left + fr.left, right: rg.right + fr.left }, { h: { cfi: cfiRange, text } });
     });
     r.on('click', (e) => {
       if (Date.now() - (this._swiped || 0) < 400) return;
-      if (this.app.hlMode) { setTimeout(() => { if (Date.now() - (this._hlHit || 0) > 400) this.highlightTap(e); }, 0); return; }
+      if (this.app.hlBarOpen()) { this.app.hideHlBar(true); return; }
       const sel = e.view.getSelection();
+      if (this.app.hlMode) { setTimeout(() => { if (Date.now() - (this._hlHit || 0) > 400) this.highlightTap(e); }, 0); return; }
+      if (Date.now() - (this._hlHit || 0) < 400) return;
       if ((sel && String(sel).trim()) || e.target.closest('a')) return;
       const fr = e.view.frameElement.getBoundingClientRect();
       this.app.onTap((e.clientX + fr.left) / window.innerWidth);
@@ -1127,15 +1152,23 @@ class EpubReader {
   addMark(h) {
     const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#c45c34';
     try {
-      this.rendition.annotations.highlight(h.cfi, { id: h.id }, () => { this._hlHit = Date.now(); this.app.onHighlightTap(h.id); }, 'hl',
-        { fill: accent, 'fill-opacity': '0.32', 'mix-blend-mode': 'multiply' });
+      const tap = (ev) => {
+        this._hlHit = Date.now();
+        const x = ev && ev.clientX, y = ev && ev.clientY;
+        this.app.editHighlight(h.id, x != null ? { top: y - 6, bottom: y + 6, left: x, right: x } : null);
+      };
+      const colour = { y: '#f4d03f', g: '#6fcf75', b: '#5aaeea', p: '#ef82ad' }[h.c];
+      if (h.c === 'u') this.rendition.annotations.underline(h.cfi, { id: h.id }, tap, 'hl', { stroke: accent, 'stroke-opacity': '0.9', 'stroke-width': '2px' });
+      else this.rendition.annotations.highlight(h.cfi, { id: h.id }, tap, 'hl', { fill: colour || '#f4d03f', 'fill-opacity': '0.4', 'mix-blend-mode': 'multiply' });
     } catch (e) { /* a highlight from an older layout */ }
   }
 
   removeMark(id) {
     const h = this.app.highlights().find((x) => x.id === id);
-    if (h && h.cfi) this.rendition.annotations.remove(h.cfi, 'highlight');
+    if (h && h.cfi) this.rendition.annotations.remove(h.cfi, h.c === 'u' ? 'underline' : 'highlight');
   }
+
+  clearSelection() { if (this._sel) { try { this._sel.removeAllRanges(); } catch (e) { /* frame gone */ } } }
 
   /** Tap in highlight mode: the sentence under the finger. */
   highlightTap(e) {
@@ -1158,7 +1191,9 @@ class EpubReader {
     }
     const contents = this.rendition.getContents().find((c) => c.document === doc);
     if (!contents) return;
-    this.app.addHighlight({ cfi: contents.cfiFromRange(range), text: range.toString().replace(/\s+/g, ' ').trim() });
+    const sel = doc.defaultView.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);   // the 'selected' event then shows the colour bar
   }
 
   next() { return this.rendition.next().then(() => true); }

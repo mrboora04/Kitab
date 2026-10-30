@@ -271,7 +271,7 @@ const App = {
   },
 
   /** In-app dialog. Resolves to true / the typed text / null when cancelled. */
-  dialog({ title, message, input, ok, danger, login }) {
+  dialog({ title, message, input, ok, danger, login, type }) {
     return new Promise((resolve) => {
       const d = $('#dialog');
       $('#dlgTitle').textContent = title || '';
@@ -279,7 +279,7 @@ const App = {
       const field = $('#dlgInput'), pass = $('#dlgPass');
       field.classList.toggle('hidden', input == null && !login);
       field.value = input || '';
-      field.type = login ? 'text' : 'url';
+      field.type = login ? 'text' : (type || 'url');
       field.placeholder = login ? 'Email or username' : '';
       pass.classList.toggle('hidden', !login);
       pass.value = '';
@@ -478,11 +478,14 @@ const App = {
 
   /* ---------------- navigation & gestures ---------------- */
   onTap(x, e) {
+    if (this.hlBarOpen()) return this.hideHlBar(true);
     if (this.panelOpen()) return this.closePanels();
-    if (this.hlMode && e && this.reader && this.reader.highlightAt) {        // highlighter: taps mark sentences
-      const h = this.reader.highlightAt(e.clientX, e.clientY);
-      if (h && h.remove) this.removeHighlight(h.remove);
-      else if (h) this.addHighlight(h);
+    if (e && this.reader && this.reader.markAt) {                              // a tap on a highlight edits it
+      const m = this.reader.markAt(e.clientX, e.clientY);
+      if (m) return this.editHighlight(m.id, m.rect);
+    }
+    if (this.hlMode && e && this.reader && this.reader.selectAt) {             // select mode: a tap selects the sentence
+      this.reader.selectAt(e.clientX, e.clientY);
       return;
     }
     if (this.tts) { this.stopTts(); toast('Stopped listening'); return; }   // tap anywhere to stop
@@ -553,14 +556,16 @@ const App = {
       this.onRelocated();
     };
     $('#hlBtn').onclick = () => this.toggleHl();
-    document.addEventListener('selectionchange', () => {      // highlighter: a finished selection becomes a highlight
-      if (!this.hlMode || !(this.reader instanceof TextReader)) return;
+    document.addEventListener('selectionchange', () => {      // a finished selection in the text view opens the colour bar
+      if (!(this.reader instanceof TextReader)) return;
       clearTimeout(this._selT);
       this._selT = setTimeout(() => {
-        const h = this.reader && this.reader.selectionHighlight && this.reader.selectionHighlight();
-        if (h) { window.getSelection().removeAllRanges(); this.addHighlight(h); }
-      }, 900);
+        const info = this.reader && this.reader.selectionInfo && this.reader.selectionInfo();
+        if (info) this.showHlBar(info.rect, { h: info.h });
+        else if (this.hlState && this.hlState.h) this.hideHlBar();
+      }, 350);
     });
+    this.bindHlBar();
     // reading tools live in the settings sheet; they close it so you land back on the page
     $('#ttsBtn').onclick = () => { if (this.tts) this.stopTts(); else { this.closePanels(); this.startTts(); } };
     $('#zoomIn').onclick = () => this.zoom(0.25);
@@ -650,14 +655,99 @@ const App = {
 
   toggleHl(force) {
     const on = force != null ? force : !this.hlMode;
-    if (on && this.reader instanceof PdfPageReader) {
-      toast('Switch PDF view to Text only (Aa) to highlight', 3500);
+    if (on && !(this.reader instanceof TextReader || this.reader instanceof EpubReader)) {
+      toast(this.meta && this.meta.scanned && !this.meta.scanComplete
+        ? 'Select works in Text only, which lights up in Aa when your scan is done.'
+        : 'To select text, open Aa and choose Text only.', 4000);
       return;
     }
     this.hlMode = on;
     $('#hlBtn').classList.toggle('on', on);
     document.body.classList.toggle('hl-mode', on);
-    if (on) { this.toggleUi(true); toast('Highlighter on: tap a sentence or select words', 3000); }
+    if (!on) this.hideHlBar(true);
+    if (on) { this.toggleUi(false); toast('Tap a sentence to select it. Press and hold to pick your own words.', 3500); }
+  },
+
+  /* The colour bar: shown over a new selection, or over a highlight that was tapped. */
+  hlState: null,
+  hlBarOpen() { return !$('#hlBar').classList.contains('hidden'); },
+
+  showHlBar(rect, state) {
+    const bar = $('#hlBar');
+    this.hlState = state;
+    bar.classList.toggle('fresh', !state.id);
+    const cur = state.id ? (this.highlights().find((x) => x.id === state.id) || {}).c || 'y' : '';
+    bar.querySelectorAll('.c').forEach((b) => b.classList.toggle('on', b.dataset.c === cur));
+    bar.classList.remove('hidden');
+    const w = bar.offsetWidth, h = bar.offsetHeight;
+    const r = rect || { top: innerHeight / 2, bottom: innerHeight / 2, left: innerWidth / 2, right: innerWidth / 2 };
+    // select mode: above the words, like Apple Books. After a press-and-hold the phone's own menu is above them, so go below
+    let top = this.hlMode && !state.id ? r.top - h - 12 : r.bottom + 34;
+    if (top < 70) top = r.bottom + 34;
+    if (top + h > innerHeight - 12) top = Math.max(70, r.top - h - 14);
+    bar.style.top = top + 'px';
+    bar.style.left = clamp((r.left + r.right) / 2 - w / 2, 8, innerWidth - w - 8) + 'px';
+  },
+
+  hideHlBar(clear) {
+    $('#hlBar').classList.add('hidden');
+    if (clear && this.reader && this.reader.clearSelection) this.reader.clearSelection();
+    this.hlState = null;
+  },
+
+  editHighlight(id, rect) { this.showHlBar(rect, { id }); },
+
+  bindHlBar() {
+    const bar = $('#hlBar');
+    bar.addEventListener('mousedown', (e) => e.preventDefault());       // keep the text selected while a button is pressed
+    bar.querySelectorAll('.c').forEach((b) => {
+      b.onclick = () => {
+        const st = this.hlState;
+        if (!st) return;
+        this.lastColour = b.dataset.c;
+        store.set('er.hlc', this.lastColour);
+        if (st.id) this.recolorHighlight(st.id, b.dataset.c);
+        else this.addHighlight(Object.assign({}, st.h, { c: b.dataset.c }));
+        this.hideHlBar(true);
+      };
+    });
+    bar.querySelector('[data-a=copy]').onclick = () => {
+      const st = this.hlState;
+      const text = st && (st.id ? (this.highlights().find((x) => x.id === st.id) || {}).text : st.h.text);
+      this.hideHlBar(false);
+      if (!text) return;
+      const done = () => toast('Copied');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => toast('Could not copy'));
+      else { try { document.execCommand('copy'); done(); } catch (e) { toast('Could not copy'); } }
+      this.reader && this.reader.clearSelection && this.reader.clearSelection();
+    };
+    bar.querySelector('[data-a=note]').onclick = async () => {
+      const st = this.hlState;
+      if (!st) return;
+      const old = st.id ? this.highlights().find((x) => x.id === st.id) : null;
+      this.hideHlBar(false);
+      const note = await this.dialog({ title: 'Note', message: (old ? old.text : st.h.text).slice(0, 90), input: (old && old.note) || '', ok: 'Save', type: 'text' });
+      if (note == null) return;
+      if (old) { old.note = note.trim(); this.saveMeta(); }
+      else this.addHighlight(Object.assign({}, st.h, { c: this.lastColour || 'y', note: note.trim() }));
+      this.reader && this.reader.clearSelection && this.reader.clearSelection();
+    };
+    bar.querySelector('[data-a=del]').onclick = () => {
+      const st = this.hlState;
+      this.hideHlBar(true);
+      if (st && st.id) this.removeHighlight(st.id);
+    };
+  },
+
+  lastColour: store.get('er.hlc', 'y'),
+
+  recolorHighlight(id, c) {
+    const h = this.highlights().find((x) => x.id === id);
+    if (!h) return;
+    if (this.reader.removeMark) this.reader.removeMark(id);
+    h.c = c;
+    this.saveMeta();
+    this.reader.addMark(h);
   },
 
   async addHighlight(h) {
@@ -667,12 +757,12 @@ const App = {
     h.chapter = l.chapter;
     h.progress = l.progress;
     if (this.reader.src && this.reader.src.pdf) h.page = l.loc.page;
+    h.c = h.c || this.lastColour || 'y';
     h.at = Date.now();
     (this.meta.highlights = this.meta.highlights || []).push(h);
     this.meta.highlights.sort((a, b) => a.progress - b.progress);
     this.saveMeta();
     this.reader.addMark(h);
-    toast('Highlighted');
   },
 
   removeHighlight(id) {
@@ -683,14 +773,12 @@ const App = {
     toast('Highlight removed');
   },
 
-  onHighlightTap(id) { if (this.hlMode) this.removeHighlight(id); },
-
   renderHighlights() {
     const list = this.highlights();
     $('#markList').innerHTML = list.length ? list.map((h, i) => `
-      <div class="mark"><button data-go="${i}"><q>${esc(h.text.slice(0, 180))}${h.text.length > 180 ? '…' : ''}</q><small>${Math.round((h.progress || 0) * 100)}% · ${esc(h.chapter || '')}</small></button>
+      <div class="mark"><button data-go="${i}"><q style="--hc:var(--hl-${h.c === 'u' ? 'y' : h.c || 'y'})">${esc(h.text.slice(0, 180))}${h.text.length > 180 ? '…' : ''}</q>${h.note ? `<em>${esc(h.note)}</em>` : ''}<small>${Math.round((h.progress || 0) * 100)}% · ${esc(h.chapter || '')}</small></button>
       <button class="del" data-del="${i}" aria-label="Delete highlight">✕</button></div>`).join('')
-      : '<div class="none">No highlights yet. Tap 🖍 at the top, then tap a sentence or select words.</div>';
+      : '<div class="none">No highlights yet. Press and hold a word, or tap the select button at the top.</div>';
     $$('#markList [data-go]').forEach((b) => {
       b.onclick = async () => {
         const h = list[b.dataset.go];
