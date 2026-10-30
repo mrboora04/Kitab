@@ -46,21 +46,22 @@ const OCR = {
    * Queues one page. Pages are scanned one at a time; the page you are looking at (high) jumps the line,
    * read-ahead pages wait at the back. A failing page is retried 3 times with a fresh scanner.
    */
-  schedule(key, label, run, high) {
+  schedule(key, label, run, high, owner) {
     if (this.current && this.current.key === key) return this.current.promise;
     const waiting = this.jobs.find((j) => j.key === key);
     if (waiting) { if (high) this.promote(key); return waiting.promise; }
-    const job = { key, label, run, high };
+    const job = { key, label, run, high, owner: owner || 'reader' };
     job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
     if (high) this.jobs.unshift(job); else this.jobs.push(job);
     this.pump();
     return job.promise;
   },
 
-  /** Drops waiting pages of a book you closed, so they never hold up the next one. */
-  cancel(prefix) {
+  /** Drops a closed book's reader pages (not the background scan), so they never hold up anything else. */
+  cancel(prefix, owner) {
+    const mine = (j) => j.key.startsWith(prefix) && (!owner || j.owner === owner);
     const cur = this.current;
-    if (cur && cur.key.startsWith(prefix)) {        // the page in progress belongs to a closed book: let go of it now
+    if (cur && mine(cur)) {        // the page in progress belongs to a closed book: let go of it now
       cur.cancelled = true;
       const e = new Error('cancelled'); e.reason = 'cancelled';
       cur.reject(e);
@@ -68,7 +69,7 @@ const OCR = {
       setTimeout(() => this.pump());
     }
     this.jobs = this.jobs.filter((j) => {
-      if (!j.key.startsWith(prefix)) return true;
+      if (!mine(j)) return true;
       const e = new Error('cancelled'); e.reason = 'cancelled';
       j.reject(e);
       return false;
@@ -133,10 +134,44 @@ const OCR = {
   async read(canvas) {
     await this.init();
     const pre = this.clean(canvas);
-    const { data } = await this.worker.recognize(pre.canvas);
-    const caps = await this.readDropCaps(pre.caps);
     await Words.load();
-    return this.layout(data, caps, pre.medH);
+    const caps = await this.readDropCaps(pre.caps);
+    if (pre.gutter) {
+      // Two columns: read the left column, then the right one, so their lines never get mixed.
+      const W = pre.canvas.width, H = pre.canvas.height, g = pre.gutter;
+      const left = await this.worker.recognize(pre.canvas, { rectangle: { left: 0, top: 0, width: g, height: H } });
+      const right = await this.worker.recognize(pre.canvas, { rectangle: { left: g, top: 0, width: W - g, height: H } });
+      return { html: this.layout(left.data, caps, pre.medH) + '\n' + this.layout(right.data, [], pre.medH), confidence: Math.min(left.data.confidence, right.data.confidence) };
+    }
+    const { data } = await this.worker.recognize(pre.canvas);
+    const small = await this.readSmallPrint(pre.canvas, data);
+    if (small) return { html: this.layout(small.data, [], small.medH), confidence: small.data.confidence };
+    return { html: this.layout(data, caps, pre.medH), confidence: data.confidence };
+  },
+
+  /**
+   * Small print: when the words came out tiny and the scanner was unsure, read an enlarged copy of the
+   * text area again and keep whichever reading is more confident.
+   */
+  async readSmallPrint(page, data) {
+    const words = (data.words || []).filter((w) => w.confidence > 15 && w.bbox.y1 > w.bbox.y0);
+    if (words.length < 8 || data.confidence >= 80) return null;
+    const hs = words.map((w) => w.bbox.y1 - w.bbox.y0).sort((a, b) => a - b);
+    const wordH = hs[hs.length >> 1];
+    if (wordH >= 28) return null;
+    const pad = wordH * 2;
+    const x0 = Math.max(0, Math.min(...words.map((w) => w.bbox.x0)) - pad), y0 = Math.max(0, Math.min(...words.map((w) => w.bbox.y0)) - pad);
+    const x1 = Math.min(page.width, Math.max(...words.map((w) => w.bbox.x1)) + pad), y1 = Math.min(page.height, Math.max(...words.map((w) => w.bbox.y1)) + pad);
+    const f = Math.min(44 / wordH, 3, Math.sqrt(12e6 / Math.max(1, (x1 - x0) * (y1 - y0))));
+    if (f < 1.3) return null;
+    const big = document.createElement('canvas');
+    big.width = Math.round((x1 - x0) * f); big.height = Math.round((y1 - y0) * f);
+    const ctx = big.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, big.width, big.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(page, x0, y0, x1 - x0, y1 - y0, 0, 0, big.width, big.height);
+    const again = (await this.worker.recognize(big)).data;
+    return again.confidence > data.confidence + 5 ? { data: again, medH: Math.round(wordH * f * 0.6) } : null;
   },
 
   /* ---------------- 1 + 2: clean the image ---------------- */
@@ -154,6 +189,9 @@ const OCR = {
     for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
     acc = 0;
     for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.35) { hi = v; break; } }  // paper is the bright majority
+    // A page with very little text has less than 1% ink, so the darkest 1% can be plain paper.
+    // Never treat paper as black: black is at least well below the paper tone.
+    lo = Math.min(lo, Math.max(0, hi - 110));
     const span = Math.max(40, hi - lo);
     for (let i = 0; i < n; i++) g[i] = Math.max(0, Math.min(255, ((g[i] - lo) * 255) / span));
 
@@ -221,6 +259,7 @@ const OCR = {
           const qx = x + dx, qy = y + dy;
           if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
           const q = qy * w + qx;
+          g[q] = 255;                                   // paint the ornament (and its soft edge) out of the page
           if (ink[q]) { ink[q] = 0; stack[top++] = q; }
         }
       }
@@ -258,11 +297,38 @@ const OCR = {
       .filter((c, _, all) => !all.some((o) => inside(o, c)));        // innermost of each nest
     caps.length = 0;
     if (groups.length <= 2) caps.push(...groups.sort((a, b) => a.y0 - b.y0).slice(0, 1));
-    for (let i = 0; i < n; i++) if (ink[i]) out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = 0;
+    // The scanner gets the even-toned greyscale page (minus ornaments): letter edges carry detail that
+    // pure black-and-white loses on small print and blurry copies.
+    for (let i = 0, o = 0; i < n; i++, o += 4) out[o] = out[o + 1] = out[o + 2] = g[i];
+
+    // The text area (letter-sized shapes only) and, if there is one, the empty gutter between two columns.
+    let box = null, gutter = null;
+    const letters = comps.filter((c) => c.h >= medH * 0.3 && c.h <= medH * 3.8 && c.w <= medH * 30);
+    if (letters.length > 20) {
+      box = { x0: w, y0: h, x1: 0, y1: 0 };
+      for (const c of letters) { box.x0 = Math.min(box.x0, c.x0); box.y0 = Math.min(box.y0, c.y0); box.x1 = Math.max(box.x1, c.x1); box.y1 = Math.max(box.y1, c.y1); }
+      const pad = Math.round(medH * 1.5);
+      box = { x0: Math.max(0, box.x0 - pad), y0: Math.max(0, box.y0 - pad), x1: Math.min(w, box.x1 + pad), y1: Math.min(h, box.y1 + pad) };
+      if (box.y1 - box.y0 > medH * 8) {
+        const cols = new Uint32Array(w);
+        for (const c of letters) for (let x = c.x0; x <= c.x1; x++) cols[x] += c.h;
+        const from = Math.round(box.x0 + (box.x1 - box.x0) * 0.25), to = Math.round(box.x0 + (box.x1 - box.x0) * 0.75);
+        let best = null, run = 0;
+        for (let x = from; x <= to; x++) {
+          if (cols[x] === 0) { run++; if (!best || run > best.len) best = { len: run, end: x }; } else run = 0;
+        }
+        if (best && best.len >= Math.max(medH * 1.2, (box.x1 - box.x0) * 0.025)) {
+          const mid = best.end - Math.floor(best.len / 2);
+          let l = 0, r = 0;
+          for (let x = box.x0; x < box.x1; x++) (x < mid ? (l += cols[x]) : (r += cols[x]));
+          if (l > (l + r) * 0.25 && r > (l + r) * 0.25) gutter = mid;
+        }
+      }
+    }
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').putImageData(new ImageData(out, w, h), 0, 0);
-    return { canvas, caps, medH };
+    return { canvas, caps, medH, box, gutter };
   },
 
   /* ---------------- 3: read the drop caps ---------------- */
@@ -293,7 +359,9 @@ const OCR = {
     const junk = /^[|\\/~_=<>^`´¨°•·.,;:]+$/;
     const lines = [];
     for (const ln of data.lines || []) {
-      const words = (ln.words || []).map((w) => {
+      const words = (ln.words || []).map((w, k, all) => {
+        // in sans-serif type a capital I looks like a bar: a lone bar or l next to words is "I"
+        if (/^[|l1]$/.test((w.text || '').trim()) && all.length > 1) return { ...w, text: 'I', confidence: Math.max(w.confidence, 60) };
         // a real word with a speck glued to its edge (“lifted) scores low: keep the clean core
         const core = (w.text || '').trim().replace(/^[^A-Za-z0-9]+/, '');
         return w.confidence < 55 && w.confidence >= 30 && core.length >= 4 && /^[A-Za-z]+[.,;:!?'’”)]*$/.test(core) ? { ...w, text: core, confidence: 60 } : w;
@@ -301,8 +369,11 @@ const OCR = {
         const t = (w.text || '').trim();
         if (!t || junk.test(t)) return false;
         if (!/[A-Za-z0-9]/.test(t)) return t.length === 1 && /[—–-]/.test(t);       // keep a lone dash
-        if (w.confidence < 55) return false;
-        if (t.length <= 2 && w.confidence < 75 && !/^(a|an|am|as|at|be|by|do|go|he|if|in|is|it|me|my|no|of|on|or|so|to|up|us|we|I|A)$/i.test(t)) return false;
+        // a real English word is kept even when the scan is unsure (blurry copies); anything else needs confidence
+        const core = t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+        const real = core.length >= 2 && Words.rank && Words.rank.has(core.toLowerCase());
+        if (w.confidence < (real ? 20 : 55)) return false;
+        if (t.length <= 2 && w.confidence < (real ? 30 : 75) && !/^(a|an|am|as|at|be|by|do|go|he|if|in|is|it|me|my|no|of|on|or|so|to|up|us|we|I|A)$/i.test(t)) return false;
         return true;
       });
       while (words.length && /^[—–-]$/.test(words[0].text.trim())) words.shift();   // a lone dash at a line edge is a speck
@@ -325,7 +396,9 @@ const OCR = {
       const cand = lines.filter((l) => l.x0 >= cap.x1 - medH * 2 && l.y0 >= cap.y0 - medH * 2.5 && l.y0 <= cap.y0 + medH * 3).sort((a, b) => a.y0 - b.y0)[0];
       if (!cand) continue;
       const first = cand.words[0];
-      cand.words[0] = (first[0] && first[0].toUpperCase() === cap.letter && first.length > 3 ? '' : cap.letter) + first;
+      if (first[0] && first[0].toUpperCase() === cap.letter && first.length > 3) { /* the letter is already there */ }
+      else if (/^[IA]$/.test(cap.letter) && !Words.known(cap.letter + first) && Words.known(first.replace(/[^A-Za-z]/g, ''))) cand.words.unshift(cap.letter);   // "I went", "A day"
+      else cand.words[0] = cap.letter + first;   // "HE" -> "THE"
       lines.forEach((l) => { if (l.x0 >= cap.x1 - medH * 2 && l.y0 >= cap.y0 - medH && l.y1 <= cap.y1 + medH * 2) l.capLine = true; });
     }
 
@@ -397,7 +470,7 @@ const Words = {
     return this.rank.has(l) || (this.seen.get(l) || 0) >= 3 || /^[ivxlcdm]+$/.test(l) && l.length <= 6;
   },
 
-  CONFUSIONS: [['rn', 'm'], ['m', 'rn'], ['cl', 'd'], ['d', 'cl'], ['li', 'h'], ['h', 'li'], ['vv', 'w'], ['ii', 'u'], ['ri', 'n'],
+  CONFUSIONS: [['rn', 'm'], ['m', 'rn'], ['m', 'rr'], ['nn', 'm'], ['cl', 'd'], ['d', 'cl'], ['li', 'h'], ['h', 'li'], ['vv', 'w'], ['ii', 'u'], ['ri', 'n'],
     ['1', 'l'], ['l', 'i'], ['i', 'l'], ['0', 'o'], ['5', 's'], ['c', 'e'], ['e', 'c'], ['u', 'n'], ['n', 'u'], ['tl', 'd'], ['fi', 'h'], ['f', 't'], ['t', 'f']],
 
   /** The single best repair of one lower-case word, or null. */

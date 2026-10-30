@@ -84,7 +84,12 @@ const App = {
     this.bindReader();
     this.bindSettings();
     Browse.init();
-    OCR.onChange = (label, waiting) => this.showScanState(label, waiting);
+    OCR.onChange = (label) => this.showScanState(label);
+    // finish scanning a book that was not done when the app was last closed
+    setTimeout(() => {
+      const todo = this.books().find((b) => b.meta.scanAll && !b.meta.scanComplete);
+      if (todo) BookScanner.start(todo.name, 1);
+    }, 4000);
     this.renderLibrary();
   },
 
@@ -189,6 +194,7 @@ const App = {
         <button class="more" data-menu="${esc(b.name)}" aria-label="Options">⋮</button>
         <div class="title">${esc(b.meta.title || prettyName(b.name))}</div>
         <div class="meta">${b.meta.progress ? Math.round(b.meta.progress * 100) + '% · ' : ''}${ago(b.meta.lastRead)}</div>
+        ${b.meta.scanAll && !b.meta.scanComplete && b.meta.scanTotal ? `<div class="meta scan">📝 Text ${Math.round((b.meta.scanDone || 0) / b.meta.scanTotal * 100)}%</div>` : ''}
       </div>`).join('');
     $$('#pane-library [data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
     $$('#pane-library [data-menu]').forEach((el) => { el.onclick = (e) => { e.stopPropagation(); this.bookMenu(el.dataset.menu, el); }; });
@@ -254,7 +260,9 @@ const App = {
           this.renderLibrary();
         }
         if (a === 'del' && await this.dialog({ title: `Remove “${meta.title || prettyName(name)}”?`, message: 'It is removed from Kitab only. Your original file is not touched.', ok: 'Remove', danger: true })) {
+          if (BookScanner.book === name) BookScanner.stop();
           Native.deleteBook(name);
+          ScanStore.clear(name);
           store.del(this.bookKey(name));
           store.del('er.locs.' + name);
           this.renderLibrary();
@@ -331,6 +339,7 @@ const App = {
         this.applySettings();
         await this.makePdfReader(this.meta.loc);
         if (!this.meta.cover) this.pdfCover();
+        if (this.meta.scanned && this.settings.pdfMode === 'reflow') setTimeout(() => this.name === name && BookScanner.start(name, this.reader.location().loc.page || 1), 1500);
         if (this.meta.scanned && this.settings.pdfMode !== 'reflow' && !this.meta.ocrHinted) {
           this.meta.ocrHinted = true;
           this.saveMeta();
@@ -373,14 +382,7 @@ const App = {
     if (reflow) {
       const src = await pdfTextSource(this.pdf, {
         scanned: !!this.meta.scanned, key: this.name,
-        onStatus: (msg) => {
-          // a scan may hold the screen for 5 seconds at most; after that it carries on in the background
-          clearTimeout(this._scanT);
-          if (msg) {
-            busy(true, msg, OCR.worker ? '' : 'Starting the scanner (first time only)…');
-            this._scanT = setTimeout(() => this.onScanSlow(), 5000);
-          } else if (this._opening !== true) busy(false);
-        },
+        onStatus: () => {},           // scanning never blocks the screen; progress is shown in Aa
       });
       this.reader = new TextReader($('#stage'), this, src);
       await this.reader.open(loc && loc.s != null ? loc : src.toLoc(page));
@@ -427,7 +429,7 @@ const App = {
   },
 
   async closeBook(keepView) {
-    if (this.name) OCR.cancel(this.name + ':');
+    if (this.name) OCR.cancel(this.name + ':', 'reader');   // the background scan of the whole book keeps going
     this.stopTts();
     if (this.hlMode) this.toggleHl(false);
     Native.setSecure && Native.setSecure(false);
@@ -612,11 +614,28 @@ const App = {
   },
 
   /** Aa shows what the scanner is doing: "Scanning page 12 · 2 waiting", or nothing when it is idle. */
-  showScanState(label, waiting) {
+  showScanState(label) {
     const el = $('#scanState');
     if (!el) return;
-    el.classList.toggle('hidden', !label);
-    if (label) el.innerHTML = `<span class="mini-spin"></span> Scanning ${esc(label)}${waiting ? ` · ${waiting} more waiting` : ''}`;
+    const m = this.meta;
+    const total = m && m.scanTotal, done = m && m.scanDone;
+    const book = total ? (done >= total ? '✓ The whole book is saved as text' : `Text ready for ${done} of ${total} pages`) : '';
+    el.classList.toggle('hidden', !label && !book);
+    el.innerHTML = (label && !(done >= total) ? '<span class="mini-spin"></span>' : '') +
+      `<span>${label ? `Scanning ${esc(label)}${book ? ' · ' : ''}` : ''}${book}</span>` +
+      (total && done < total ? `<i class="scanbar"><b style="width:${Math.round(done / total * 100)}%"></b></i>` : '');
+  },
+
+  /** Called by the background scanner after each page. */
+  onBookScan(name, done, total, finished) {
+    const meta = name === this.name ? this.meta : this.bookMeta(name);
+    meta.scanDone = done;
+    meta.scanTotal = total;
+    if (finished) meta.scanComplete = done >= total;
+    store.set(this.bookKey(name), meta);
+    if (name === this.name) this.showScanState(OCR.current && OCR.current.label);
+    if (finished && done >= total) toast(`“${meta.title || prettyName(name)}” is saved as text. No more scanning needed.`, 4500);
+    if (!this.reader && this.tab === 'library' && (finished || done % 5 === 0)) this.renderLibrary();
   },
 
   /* ---------------- highlights ---------------- */
@@ -744,6 +763,9 @@ const App = {
       busy(true, value === 'reflow' ? (this.meta && this.meta.scanned ? 'Reading the scanned page…' : 'Getting the text…') : 'Showing the pages…');
       this._opening = true;
       this.makePdfReader({ page: l.page })
+        .then(() => {   // then scan the whole book once, in the background (after the page is on screen)
+          if (value === 'reflow' && this.meta && this.meta.scanned) setTimeout(() => this.name && BookScanner.start(this.name, l.page || 1), 1500);
+        })
         .catch((e) => toast('Could not show the text: ' + (e.message || e), 4000))
         .finally(() => { this._opening = false; busy(false); this.toggleUi(false); this.onRelocated(); });
     } else if (layoutKeys.includes(key) || (key === 'theme' && this.reader instanceof EpubReader)) {
@@ -793,6 +815,60 @@ window.App = App;
  * last 3 minutes, and Kitab is not reading aloud). Every few minutes it suggests a 20-second break.
  * Skip it twice and, if "Insist" is on, the next reminder closes the book for a short rest.
  */
+/*
+ * Scans a whole scanned book once, in the background, from the page you are on to the end and then
+ * the start. Every page is saved (ScanStore), so nothing is ever scanned twice. It keeps going when you
+ * close the book and picks up again the next time Kitab opens. Pages you are looking at always go first.
+ */
+const BookScanner = {
+  book: null,
+  run: null,
+
+  async start(name, fromPage) {
+    if (this.book === name && this.run) return;
+    this.stop();
+    const run = (this.run = {});
+    this.book = name;
+    // remember "scan this whole book" on the open book too, or saving its reading position would erase it
+    const meta = App.name === name && App.meta ? App.meta : App.bookMeta(name);
+    if (!meta.scanAll) { meta.scanAll = true; store.set(App.bookKey(name), meta); }
+    let pdf;
+    try {
+      const data = new Uint8Array(await (await fetch('books/' + encodeURIComponent(name))).arrayBuffer());
+      pdf = await pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+    } catch (e) { if (this.run === run) this.run = null; return; }
+    const total = pdf.numPages;
+    const start = Math.min(Math.max(1, fromPage || 1), total);
+    const order = [];
+    for (let n = start; n <= total; n++) order.push(n);
+    for (let n = 1; n < start; n++) order.push(n);
+    const done = () => { let d = 0; for (let n = 1; n <= total; n++) if (ScanStore.get(name, n) != null) d++; return d; };
+    let count = done();
+    App.onBookScan(name, count, total, false);
+    const failed = [];
+    for (const pass of [order, failed]) {
+      for (const n of pass.slice()) {
+        if (this.run !== run) { pdf.destroy(); return; }
+        if (ScanStore.get(name, n) != null) continue;
+        const html = await ocrPageHtml(pdf, n, name, () => {}, true, 'bg');
+        if (/scan-fail/.test(html)) { if (pass === order) failed.push(n); continue; }
+        count++;
+        App.onBookScan(name, count, total, false);
+        await new Promise((r) => setTimeout(r, 40));        // let the reader breathe between pages
+      }
+    }
+    pdf.destroy();
+    if (this.run !== run) return;
+    this.run = null;
+    App.onBookScan(name, done(), total, true);
+  },
+
+  stop() {
+    this.run = null;
+    if (this.book) OCR.cancel(this.book + ':', 'bg');
+  },
+};
+
 const EyeCare = {
   LINES: [
     'Your eyes read every word for you. Give them twenty seconds.',

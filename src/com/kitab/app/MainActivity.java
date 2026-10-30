@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     WebView web;
     File booksDir;
     File coversDir;
+    File scansDir;
     TextToSpeech tts;
     boolean ttsReady;
     boolean volumeKeys = true;
@@ -62,6 +63,8 @@ public class MainActivity extends Activity {
         booksDir.mkdirs();
         coversDir = new File(getFilesDir(), "covers");
         coversDir.mkdirs();
+        scansDir = new File(getFilesDir(), "scans");
+        scansDir.mkdirs();
 
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#f7f3ea"));
@@ -247,6 +250,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    File scanDir(String book) {
+        return new File(scansDir, book.replaceAll("[^A-Za-z0-9._-]", "_"));
+    }
+
+    void deleteScans(String book) {
+        File[] files = scanDir(book).listFiles();
+        if (files != null) for (File f : files) f.delete();
+        scanDir(book).delete();
+    }
+
     void js(String code) {
         if (web != null) web.evaluateJavascript(code, null);
     }
@@ -343,6 +356,7 @@ public class MainActivity extends Activity {
         public boolean deleteBook(String name) {
             File f = new File(booksDir, name);
             new File(coversDir, name + ".jpg").delete();
+            deleteScans(name);
             return f.getParentFile().equals(booksDir) && f.delete();
         }
 
@@ -404,6 +418,42 @@ public class MainActivity extends Activity {
                     js("window.App && App.onDownloaded(" + JSONObject.quote(id) + "," + (n == null ? "null" : JSONObject.quote(n)) + "," + (err == null ? "null" : JSONObject.quote(err)) + ")");
                 }});
             }}).start();
+        }
+
+        /* Scanned text is kept as one small file per page, so a page is never scanned twice. */
+        @JavascriptInterface
+        public void saveScan(String book, int page, String html) {
+            File dir = scanDir(book);
+            dir.mkdirs();
+            try (OutputStream os = new FileOutputStream(new File(dir, page + ".html"))) {
+                os.write(html.getBytes("UTF-8"));
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public String getScan(String book, int page) {
+            File f = new File(scanDir(book), page + ".html");
+            if (!f.isFile()) return null;
+            try (InputStream in = new FileInputStream(f)) {
+                byte[] buf = new byte[(int) f.length()];
+                int off = 0, n;
+                while (off < buf.length && (n = in.read(buf, off, buf.length - off)) > 0) off += n;
+                return new String(buf, 0, off, "UTF-8");
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        @JavascriptInterface
+        public int scanCount(String book) {
+            String[] names = scanDir(book).list();
+            return names == null ? 0 : names.length;
+        }
+
+        @JavascriptInterface
+        public void deleteScans(String book) {
+            MainActivity.this.deleteScans(book);
         }
 
         @JavascriptInterface
