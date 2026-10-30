@@ -468,3 +468,16 @@ body.hl-mode .tv { cursor: text; }
 .lk-body a.more { display: inline-block; margin-top: 10px; color: var(--accent); font-weight: 600; }
 .lk-body .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
 .lk-body .spin { color: var(--muted); }
+
+/* ---------- Select text in a PDF page ---------- */
+.pdf-page { position: relative; overflow: hidden; }
+.pdf-page .textLayer { position: absolute; left: 0; top: 0; overflow: hidden; line-height: 1; text-align: initial; -webkit-text-size-adjust: none; z-index: 2; }
+.pdf-page .textLayer span, .pdf-page .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0 0; -webkit-user-select: text; user-select: text; }
+.pdf-page .textLayer ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.pdf-page .hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; mix-blend-mode: multiply; }
+.hl-r { position: absolute; border-radius: 2px; background: color-mix(in srgb, var(--hl-y) 60%, transparent); }
+.hl-r[data-c="g"] { background: color-mix(in srgb, var(--hl-g) 55%, transparent); }
+.hl-r[data-c="b"] { background: color-mix(in srgb, var(--hl-b) 52%, transparent); }
+.hl-r[data-c="p"] { background: color-mix(in srgb, var(--hl-p) 52%, transparent); }
+.hl-r[data-c="u"] { background: none; border-bottom: 2px solid var(--accent); border-radius: 0; }
+.pdf-page .textLayer.scanned { white-space: pre; }

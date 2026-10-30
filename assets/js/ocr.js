@@ -182,12 +182,25 @@ const OCR = {
       const W = pre.canvas.width, H = pre.canvas.height, g = pre.gutter;
       const left = await worker.recognize(pre.canvas, { rectangle: { left: 0, top: 0, width: g, height: H } });
       const right = await worker.recognize(pre.canvas, { rectangle: { left: g, top: 0, width: W - g, height: H } });
-      return { html: this.layout(left.data, caps, pre.medH) + '\n' + this.layout(right.data, [], pre.medH), confidence: Math.min(left.data.confidence, right.data.confidence) };
+      return { html: this.layout(left.data, caps, pre.medH) + '\n' + this.layout(right.data, [], pre.medH), confidence: Math.min(left.data.confidence, right.data.confidence),
+        words: this.boxes(left.data, pre.canvas).concat(this.boxes(right.data, pre.canvas)) };
     }
     const { data } = await worker.recognize(pre.canvas);
     const small = await this.readSmallPrint(pre.canvas, data, worker);
-    if (small) return { html: this.layout(small.data, [], small.medH), confidence: small.data.confidence };
-    return { html: this.layout(data, caps, pre.medH), confidence: data.confidence };
+    if (small) return { html: this.layout(small.data, [], small.medH), confidence: small.data.confidence, words: this.boxes(small.data, pre.canvas, small.map) };
+    return { html: this.layout(data, caps, pre.medH), confidence: data.confidence, words: this.boxes(data, pre.canvas) };
+  },
+
+  /** Where each word is on the page, as thousandths of the page: [text, left, top, right, bottom]. Used to select words on the original page. */
+  boxes(data, canvas, map) {
+    const W = canvas.width, H = canvas.height, out = [];
+    for (const w of data.words || []) {
+      const t = (w.text || '').trim();
+      if (!t || w.confidence < 20 || w.bbox.y1 <= w.bbox.y0 || w.bbox.x1 <= w.bbox.x0) continue;
+      const b = map ? map(w.bbox) : w.bbox;
+      out.push([t, Math.round(b.x0 / W * 1000), Math.round(b.y0 / H * 1000), Math.round(b.x1 / W * 1000), Math.round(b.y1 / H * 1000)]);
+    }
+    return out;
   },
 
   /**
@@ -212,7 +225,7 @@ const OCR = {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(page, x0, y0, x1 - x0, y1 - y0, 0, 0, big.width, big.height);
     const again = (await worker.recognize(big)).data;
-    return again.confidence > data.confidence + 5 ? { data: again, medH: Math.round(wordH * f * 0.6) } : null;
+    return again.confidence > data.confidence + 5 ? { data: again, medH: Math.round(wordH * f * 0.6), map: (b) => ({ x0: x0 + b.x0 / f, y0: y0 + b.y0 / f, x1: x0 + b.x1 / f, y1: y0 + b.y1 / f }) } : null;
   },
 
   /* ---------------- 1 + 2: clean the image ---------------- */

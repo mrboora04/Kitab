@@ -24,6 +24,8 @@ FONTS.book = FONTS.serif;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 // useWorkerFetch: false keeps all loading on the page, where the app's request handler sees it.
+/** Load a PDF in pieces (the app serves byte ranges) instead of reading the whole file first. */
+const PDF_RANGE = { disableAutoFetch: true };
 const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false };
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -718,9 +720,11 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
         const sharp = await OCR.read(await render(2600), worker);
         if (sharp.confidence > best.confidence) best = sharp;
       }
-      return best.html;
+      // where the words are rides along as an invisible comment, so the original page can be selected too
+      return best.html + (best.words && best.words.length ? `<!--W:${JSON.stringify(best.words)}-->` : '');
     }, !quiet, owner);
     ScanStore.put(key, n, html);
+    if (App.reader && App.reader.refreshText && App.name === key) App.reader.refreshText(n);
     return html;
   } catch (e) {
     return scanFailedHtml(n, e);                  // not saved, so it is tried again next time
@@ -730,7 +734,7 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
 /** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
 function scanFailedHtml(n, e) {
   const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
-  const body = `Kitab 1.7 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const body = `Kitab 1.8 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
   const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
   return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
     <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
@@ -930,7 +934,141 @@ class PdfPageReader {
     try { await task.promise; } catch (e) { return; }  // cancelled
     box.innerHTML = '';
     box.appendChild(canvas);
+    box._n = n;
+    box._crop = crop;
+    const hl = document.createElement('div');
+    hl.className = 'hl-layer';
+    box.appendChild(hl);
+    for (const h of this.app.highlights()) if (h.page === n && h.rects) this.paintMark(box, h);
+    this.textLayer(page, box, scale, crop, base);   // selectable text on top, filled in when ready
   }
+
+  /** An invisible copy of the page's text over the picture, so words can be selected (born-digital PDFs). */
+  async textLayer(page, box, scale, crop, base) {
+    try {
+      const tc = await page.getTextContent();
+      if (!box.isConnected) return;
+      if (!tc.items.some((i) => i.str && i.str.trim())) return this.scannedLayer(page, box, scale, crop, base);   // a scan: use the words the scanner found
+      const layer = document.createElement('div');
+      layer.className = 'textLayer';
+      const vp = page.getViewport({ scale });
+      layer.style.setProperty('--scale-factor', vp.scale);
+      // the layer covers the whole page; shift it so the trimmed part lines up with the picture
+      layer.style.left = (-crop.x0 * base.width * scale) + 'px';
+      layer.style.top = (-crop.y0 * base.height * scale) + 'px';
+      box.appendChild(layer);
+      await pdfjsLib.renderTextLayer({ textContentSource: tc, container: layer, viewport: vp, textDivs: [] }).promise;
+    } catch (e) { /* the page is still readable without it */ }
+  }
+
+  /** For a scanned page: invisible words placed where the scanner found them. */
+  scannedLayer(page, box, scale, crop, base) {
+    const html = ScanStore.get(this.app.name, page.pageNumber);
+    const m = html && /<!--W:(\[.*?\])-->/s.exec(html);
+    if (!m || !box.isConnected) return;
+    let words;
+    try { words = JSON.parse(m[1]); } catch (e) { return; }
+    box.querySelector('.textLayer')?.remove();
+    const W = base.width * scale, H = base.height * scale;
+    const layer = document.createElement('div');
+    layer.className = 'textLayer scanned';
+    layer.style.cssText = `width:${W}px;height:${H}px;left:${-crop.x0 * W}px;top:${-crop.y0 * H}px`;
+    const spans = words.map(([t, a, b, c, d]) => {
+      const sp = document.createElement('span');
+      sp.textContent = t;
+      sp.style.cssText = `left:${a / 10}%;top:${b / 10}%;font-size:${Math.max(4, (d - b) / 1000 * H * 0.85)}px;line-height:${(d - b) / 1000 * H}px`;
+      sp._w = (c - a) / 1000 * W;
+      return sp;
+    });
+    spans.forEach((sp) => { layer.appendChild(sp); layer.appendChild(document.createTextNode(' ')); });
+    box.appendChild(layer);
+    const nat = spans.map((sp) => sp.getBoundingClientRect().width);     // read all sizes first, then write
+    spans.forEach((sp, i) => { if (nat[i] > 0) sp.style.transform = `scaleX(${sp._w / nat[i]})`; });
+  }
+
+  /** A page finished scanning while it is on screen: make its words selectable. */
+  refreshText(n) {
+    for (const b of this.boxes()) {
+      if (b._n === n && !b.querySelector('.textLayer span')) this.pdf.getPage(n).then((pg) => {
+        const base = pg.getViewport({ scale: 1 });
+        const c = b._crop, cw = base.width * (c.x1 - c.x0);
+        this.scannedLayer(pg, b, b.offsetWidth / cw, c, base);
+      });
+    }
+  }
+
+  /** Whether the page on screen has words that can be selected. */
+  canSelect() { return !!this.wrap.querySelector('.textLayer span'); }
+
+  boxes() { return [...this.wrap.querySelectorAll('.pdf-page')].filter((b) => b._n); }
+
+  /* --- highlights on a PDF page: { id, page, rects: [{ x, y, w, h }] as fractions of the whole page } --- */
+  paintMark(box, h) {
+    const layer = box.querySelector('.hl-layer');
+    const c = box._crop, cw = c.x1 - c.x0, ch = c.y1 - c.y0;
+    if (!layer) return;
+    for (const r of h.rects) {
+      const d = document.createElement('i');
+      d.className = 'hl-r';
+      d.dataset.h = h.id;
+      if (h.c) d.dataset.c = h.c;
+      d.style.left = ((r.x - c.x0) / cw * 100) + '%'; d.style.top = ((r.y - c.y0) / ch * 100) + '%';
+      d.style.width = (r.w / cw * 100) + '%'; d.style.height = (r.h / ch * 100) + '%';
+      layer.appendChild(d);
+    }
+  }
+
+  addMark(h) { for (const b of this.boxes()) if (b._n === h.page) this.paintMark(b, h); }
+
+  removeMark(id) { this.wrap.querySelectorAll(`.hl-r[data-h="${id}"]`).forEach((d) => d.remove()); }
+
+  /** A tap that lands on an existing highlight: its id and where it is on screen. */
+  markAt(x, y) {
+    for (const d of this.wrap.querySelectorAll('.hl-r')) {
+      const r = d.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return { id: d.dataset.h, rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right } };
+    }
+    return null;
+  }
+
+  /** Selects the word under the finger (the reader can then drag the handles). */
+  selectAt(x, y) {
+    const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+    if (!r || r.startContainer.nodeType !== 3 || !r.startContainer.parentElement.closest('.textLayer')) return false;
+    const t = r.startContainer.data;
+    let a = r.startOffset, b = r.startOffset;
+    while (a > 0 && /[\w'’-]/.test(t[a - 1])) a--;
+    while (b < t.length && /[\w'’-]/.test(t[b])) b++;
+    if (b <= a) return false;
+    const range = document.createRange();
+    range.setStart(r.startContainer, a); range.setEnd(r.startContainer, b);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+    return true;
+  }
+
+  /** The current selection as a highlight, with where it is on screen. */
+  selectionInfo() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+    const range = sel.getRangeAt(0);
+    const el = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
+    const layer = el && el.closest && el.closest('.textLayer');
+    if (!layer) return null;
+    const box = layer.parentElement, bb = box.getBoundingClientRect(), c = box._crop;
+    const cw = c.x1 - c.x0, ch = c.y1 - c.y0;
+    const rects = [];
+    for (const r of range.getClientRects()) {
+      if (r.width < 2 || r.height < 2) continue;
+      rects.push({ x: c.x0 + (r.left - bb.left) / bb.width * cw, y: c.y0 + (r.top - bb.top) / bb.height * ch, w: r.width / bb.width * cw, h: r.height / bb.height * ch });
+    }
+    const text = sel.toString().replace(/\s+/g, ' ').trim();
+    if (!rects.length || !text) return null;
+    const rr = range.getBoundingClientRect();
+    return { h: { page: box._n, rects, text }, rect: { top: rr.top, bottom: rr.bottom, left: rr.left, right: rr.right } };
+  }
+
+  clearSelection() { window.getSelection().removeAllRanges(); }
 
   async showPage(n) {
     this.page = clamp(n, 1, this.pdf.numPages);

@@ -328,8 +328,7 @@ const App = {
     this.applySettings(true);
     try {
       if (type === 'pdf') {
-        const data = new Uint8Array(await (await fetch(url)).arrayBuffer());
-        this.pdf = await pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+        this.pdf = await pdfjsLib.getDocument(Object.assign({ url }, PDF_OPTS, PDF_RANGE)).promise;   // read in pieces: a huge scan opens at once
         const info = await this.pdf.getMetadata().catch(() => null);
         const t = info && info.info && info.info.Title;
         if (t && t.trim().length > 2 && !/^(untitled|microsoft word|scan)/i.test(t.trim()) && !this.meta.titleSet) this.meta.title = t.trim();
@@ -559,7 +558,7 @@ const App = {
     };
     $('#hlBtn').onclick = () => this.toggleHl();
     document.addEventListener('selectionchange', () => {      // a finished selection in the text view opens the colour bar
-      if (!(this.reader instanceof TextReader)) return;
+      if (!(this.reader instanceof TextReader || this.reader instanceof PdfPageReader)) return;
       clearTimeout(this._selT);
       this._selT = setTimeout(() => {
         const info = this.reader && this.reader.selectionInfo && this.reader.selectionInfo();
@@ -657,7 +656,8 @@ const App = {
 
   toggleHl(force) {
     const on = force != null ? force : !this.hlMode;
-    if (on && !(this.reader instanceof TextReader || this.reader instanceof EpubReader)) {
+    const pdfOk = this.reader instanceof PdfPageReader && this.reader.canSelect();
+    if (on && !(this.reader instanceof TextReader || this.reader instanceof EpubReader || pdfOk)) {
       toast(this.meta && this.meta.scanned && !this.meta.scanComplete
         ? 'Select works in Text only, which lights up in Aa when your scan is done.'
         : 'To select text, open Aa and choose Text only.', 4000);
@@ -984,8 +984,7 @@ const BookScanner = {
     if (!meta.scanAll) { meta.scanAll = true; store.set(App.bookKey(name), meta); }
     let pdf;
     try {
-      const data = new Uint8Array(await (await fetch('books/' + encodeURIComponent(name))).arrayBuffer());
-      pdf = await pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+      pdf = await pdfjsLib.getDocument(Object.assign({ url: 'books/' + encodeURIComponent(name) }, PDF_OPTS, PDF_RANGE)).promise;
     } catch (e) { if (this.run === run) this.run = null; return; }
     const total = pdf.numPages;
     const start = Math.min(Math.max(1, fromPage || 1), total);

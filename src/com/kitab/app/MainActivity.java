@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                return serve(req.getUrl());
+                return serve(req.getUrl(), req.getRequestHeaders());
             }
 
             @Override
@@ -220,7 +220,7 @@ public class MainActivity extends Activity {
     }
 
     /** Serves the bundled UI from assets/ and the library from /books/. */
-    WebResourceResponse serve(Uri uri) {
+    WebResourceResponse serve(Uri uri, Map<String, String> requestHeaders) {
         String url = uri.toString();
         if (!url.startsWith(ORIGIN)) return null;
         String path = uri.getPath();
@@ -239,7 +239,40 @@ public class MainActivity extends Activity {
             } else if (path.startsWith("/books/")) {
                 File f = new File(booksDir, path.substring("/books/".length()));
                 if (!f.getCanonicalPath().startsWith(booksDir.getCanonicalPath())) throw new Exception("bad path");
-                in = new FileInputStream(f);
+                // Books are served in pieces on request, so a 100 MB scan opens by reading only what it shows
+                long length = f.length();
+                String asked = null;
+                if (requestHeaders != null) for (Map.Entry<String, String> h : requestHeaders.entrySet()) if ("range".equalsIgnoreCase(h.getKey())) asked = h.getValue();
+                long[] range = ByteRange.parse(asked, length);
+                headers.put("Accept-Ranges", "bytes");
+                if (range == ByteRange.UNSATISFIABLE) {
+                    headers.put("Content-Range", "bytes */" + length);
+                    return new WebResourceResponse("text/plain", "utf-8", 416, "Range Not Satisfiable", headers, new java.io.ByteArrayInputStream(new byte[0]));
+                }
+                FileInputStream fis = new FileInputStream(f);
+                if (range == null) {
+                    headers.put("Content-Length", String.valueOf(length));
+                    return new WebResourceResponse(mime, null, 200, "OK", headers, fis);
+                }
+                fis.getChannel().position(range[0]);
+                final long left = range[1] - range[0] + 1;
+                headers.put("Content-Range", "bytes " + range[0] + "-" + range[1] + "/" + length);
+                headers.put("Content-Length", String.valueOf(left));
+                return new WebResourceResponse(mime, null, 206, "Partial Content", headers, new java.io.FilterInputStream(fis) {
+                    long remaining = left;
+                    @Override public int read() throws java.io.IOException {
+                        if (remaining <= 0) return -1;
+                        int b = super.read();
+                        if (b >= 0) remaining--;
+                        return b;
+                    }
+                    @Override public int read(byte[] buf, int off, int len) throws java.io.IOException {
+                        if (remaining <= 0) return -1;
+                        int n = super.read(buf, off, (int) Math.min(len, remaining));
+                        if (n > 0) remaining -= n;
+                        return n;
+                    }
+                });
             } else {
                 in = getAssets().open(path.substring(1));
             }
