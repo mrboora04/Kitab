@@ -943,15 +943,20 @@ const BookScanner = {
     App.onBookScan(name, count, total, false);
     const failed = [];
     for (const pass of [order, failed]) {
-      for (const n of pass.slice()) {
-        if (this.run !== run) { pdf.destroy(); return; }
-        if (ScanStore.get(name, n) != null) continue;
-        const html = await ocrPageHtml(pdf, n, name, () => {}, true, 'bg');
-        if (/scan-fail/.test(html)) { if (pass === order) failed.push(n); continue; }
-        count++;
-        App.onBookScan(name, count, total, false);
-        await new Promise((r) => setTimeout(r, 40));        // let the reader breathe between pages
-      }
+      const queue = pass.filter((n) => ScanStore.get(name, n) == null);
+      // as many pages at once as the phone can comfortably read
+      const lane = async () => {
+        while (queue.length && this.run === run) {
+          const n = queue.shift();
+          const html = await ocrPageHtml(pdf, n, name, () => {}, true, 'bg');
+          if (/scan-fail/.test(html)) { if (pass === order) failed.push(n); continue; }
+          count++;
+          App.onBookScan(name, count, total, false);
+          await new Promise((r) => setTimeout(r, 40));        // let the reader breathe between pages
+        }
+      };
+      await Promise.all(Array.from({ length: OCR.size() }, lane));
+      if (this.run !== run) { pdf.destroy(); return; }
     }
     pdf.destroy();
     if (this.run !== run) return;

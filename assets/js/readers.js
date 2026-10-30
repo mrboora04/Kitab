@@ -698,7 +698,7 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
   if (hit != null) return hit;
   if (!quiet) onStatus(`Scanning page ${n} of ${pdf.numPages}…`);
   try {
-    const html = await OCR.schedule(`${key}:${n}`, `page ${n}`, async () => {
+    const html = await OCR.schedule(`${key}:${n}`, `page ${n}`, async (worker) => {
       const page = await pdf.getPage(n);
       const base = page.getViewport({ scale: 1 });
       const render = async (width) => {
@@ -711,11 +711,11 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
         await page.render({ canvasContext: rctx, viewport: vp }).promise;
         return raw;
       };
-      // 1600 px wide is quick and enough for normal print. A page the scanner is unsure about gets one more
+      // 1600 px wide is quick and enough for normal print. A page the scanner is unsure about (but not hopeless) gets one more
       // read from a sharper render (good scans carry detail that small print needs); the surer reading wins.
-      let best = await OCR.read(await render(1600));
-      if (best.confidence < 72) {
-        const sharp = await OCR.read(await render(2600));
+      let best = await OCR.read(await render(1600), worker);
+      if (best.confidence < 72 && best.confidence >= 40) {   // below 40 it is a picture or a blank: a sharper look will not help
+        const sharp = await OCR.read(await render(2600), worker);
         if (sharp.confidence > best.confidence) best = sharp;
       }
       return best.html;
@@ -730,7 +730,7 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
 /** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
 function scanFailedHtml(n, e) {
   const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
-  const body = `Kitab 1.4 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const body = `Kitab 1.6 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
   const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
   return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
     <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
