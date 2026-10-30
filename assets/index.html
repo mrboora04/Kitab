@@ -276,7 +276,11 @@
   <div class="sw">
     <button class="c" data-c="y" aria-label="Yellow"></button><button class="c" data-c="g" aria-label="Green"></button><button class="c" data-c="b" aria-label="Blue"></button><button class="c" data-c="p" aria-label="Pink"></button><button class="c u" data-c="u" aria-label="Underline">U</button>
   </div>
-  <div class="acts"><button data-a="copy">Copy</button><button data-a="note">Note</button><button data-a="del" class="danger">Remove</button></div>
+  <div class="acts"><button data-a="lookup">Look up</button><button data-a="copy">Copy</button><button data-a="note">Note</button><button data-a="del" class="danger">Remove</button></div>
+</div>
+<div id="lookup" class="lookup hidden" role="dialog" aria-label="Look up">
+  <div class="lk-head"><b id="lkTitle"></b><button id="lkClose" aria-label="Close">✕</button></div>
+  <div id="lkBody" class="lk-body"></div>
 </div>
 <div id="toast" class="toast"></div>
 

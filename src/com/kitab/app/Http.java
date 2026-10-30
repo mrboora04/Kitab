@@ -11,7 +11,7 @@ import java.net.URL;
 
 /** Small blocking HTTP client for catalog pages and book downloads. No Android dependencies, so it is testable on a plain JVM. */
 final class Http {
-    static final String USER_AGENT = "Kitab/1.0 (Android ebook reader)";
+    static final String USER_AGENT = "Kitab/1.6 (https://github.com/mrboora04/Kitab; Android ebook reader)";
     static final int MAX_REDIRECTS = 8;
 
     static final class Result {

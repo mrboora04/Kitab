@@ -430,6 +430,7 @@ const App = {
     if (this.name) OCR.cancel(this.name + ':', 'reader');   // the background scan of the whole book keeps going
     this.stopTts();
     if (this.hlMode) this.toggleHl(false);
+    $('#lookup').classList.add('hidden');
     Native.setSecure && Native.setSecure(false);
     this.saveNow();
     this.closePanels();
@@ -478,6 +479,7 @@ const App = {
 
   /* ---------------- navigation & gestures ---------------- */
   onTap(x, e) {
+    if (!$('#lookup').classList.contains('hidden')) { $('#lookup').classList.add('hidden'); return; }
     if (this.hlBarOpen()) return this.hideHlBar(true);
     if (this.panelOpen()) return this.closePanels();
     if (e && this.reader && this.reader.markAt) {                              // a tap on a highlight edits it
@@ -711,6 +713,12 @@ const App = {
         this.hideHlBar(true);
       };
     });
+    bar.querySelector('[data-a=lookup]').onclick = () => {
+      const st = this.hlState;
+      const text = st && (st.id ? (this.highlights().find((x) => x.id === st.id) || {}).text : st.h.text);
+      this.hideHlBar(true);
+      if (text) this.lookUp(text);
+    };
     bar.querySelector('[data-a=copy]').onclick = () => {
       const st = this.hlState;
       const text = st && (st.id ? (this.highlights().find((x) => x.id === st.id) || {}).text : st.h.text);
@@ -740,6 +748,52 @@ const App = {
   },
 
   lastColour: store.get('er.hlc', 'y'),
+
+  /* ---------------- look up: a word's meaning (Wiktionary) and what a name is (Wikipedia) ---------------- */
+  lookUp(raw) {
+    const term = raw.replace(/^[\s"'“”‘’(\[.,;:!?—–-]+|[\s"'“”‘’)\].,;:!?—–-]+$/g, '').replace(/\s+/g, ' ');
+    const sheet = $('#lookup'), body = $('#lkBody');
+    $('#lkTitle').textContent = term.length > 40 ? term.slice(0, 38) + '…' : term;
+    sheet.classList.remove('hidden');
+    $('#lkClose').onclick = () => sheet.classList.add('hidden');
+    if (!term || term.split(' ').length > 6) { body.innerHTML = '<p class="note">Select a word or a name to look it up.</p>'; return; }
+    body.innerHTML = '<p class="spin">Looking up…</p>';
+    const token = (this._lk = {});
+    const get = async (url) => { try { return JSON.parse((await Opds.fetchText(url)).body); } catch (e) { if (e.status === 404 || e.status === 400) return null; throw e; } };
+    const plain = (html) => new DOMParser().parseFromString(html || '', 'text/html').body.textContent.replace(/\s+/g, ' ').trim();
+    const one = !term.includes(' ');
+    const dictionary = one ? get('https://en.wiktionary.org/api/rest_v1/page/definition/' + encodeURIComponent(term.toLowerCase())) : Promise.resolve(null);
+    const wiki = (async () => {
+      let sum = await get('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(term.replace(/ /g, '_')) + '?redirect=true');
+      if (!sum || !sum.extract) {
+        const f = await get('https://en.wikipedia.org/w/rest.php/v1/search/title?limit=1&q=' + encodeURIComponent(term));
+        const hit = f && f.pages && f.pages[0];
+        if (hit) sum = await get('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(hit.key) + '?redirect=true');
+      }
+      return sum && sum.extract ? sum : null;
+    })();
+    Promise.all([dictionary.catch((e) => ({ error: e })), wiki.catch((e) => ({ error: e }))]).then(([dict, sum]) => {
+      if (this._lk !== token) return;
+      const err = (dict && dict.error) || (sum && sum.error);
+      if (err && !(dict && !dict.error) && !(sum && !sum.error)) { body.innerHTML = `<p>${esc(err.message || 'Could not look that up.')}</p><p class="note">Look up needs an internet connection. Only the word you selected is sent to Wikipedia.</p>`; return; }
+      let html = '';
+      const lower = one && term === term.toLowerCase();
+      const meaning = () => {
+        if (!dict || dict.error) return '';
+        const parts = (dict.en || []).slice(0, 3);
+        if (!parts.length) return '';
+        return '<h4>Meaning</h4>' + parts.map((p) => `<div class="pos">${esc(p.partOfSpeech || '')}</div><ol>${(p.definitions || []).slice(0, 3).map((d) => plain(d.definition)).filter(Boolean).map((d) => `<li>${esc(d)}</li>`).join('')}</ol>`).join('');
+      };
+      const about = () => {
+        if (!sum || sum.error) return '';
+        const img = sum.thumbnail && sum.thumbnail.source ? `<img class="thumb" src="${esc(sum.thumbnail.source)}" alt="">` : '';
+        const link = sum.content_urls && sum.content_urls.desktop && sum.content_urls.desktop.page;
+        return `<h4>${lower ? 'On Wikipedia' : 'Wikipedia'}</h4>${img}<p><b>${esc(sum.title || term)}</b>${sum.description ? ' · ' + esc(sum.description) : ''}</p><p>${esc(sum.extract)}</p>${link ? `<a class="more" href="${esc(link)}">Read more on Wikipedia</a>` : ''}`;
+      };
+      html = lower ? meaning() + about() : about() + meaning();
+      body.innerHTML = (html || `<p>Nothing found for “${esc(term)}”.</p>`) + '<p class="note">From Wikipedia and Wiktionary. Only the selected word is sent.</p>';
+    });
+  },
 
   recolorHighlight(id, c) {
     const h = this.highlights().find((x) => x.id === id);
