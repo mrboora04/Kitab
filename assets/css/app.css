@@ -428,3 +428,5 @@ body.hl-mode .tv p, body.hl-mode .tv h2 { -webkit-user-select: text; user-select
 .scanbar { display: block; flex: 1 1 100%; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .scanbar b { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 .book .meta.scan { color: var(--accent); font-weight: 600; }
+
+.seg button.disabled { opacity: .4; cursor: not-allowed; }

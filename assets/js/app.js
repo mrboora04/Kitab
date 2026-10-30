@@ -335,16 +335,14 @@ const App = {
         if (t && t.trim().length > 2 && !/^(untitled|microsoft word|scan)/i.test(t.trim()) && !this.meta.titleSet) this.meta.title = t.trim();
         if (this.meta.ocr) { this.meta.pdfMode = 'reflow'; delete this.meta.ocr; }      // from older versions
         if (this.meta.scanned == null) this.meta.scanned = await pdfLooksScanned(this.pdf);
+        // a scanned book stays on the original pages until its text is complete; the scan starts by itself
+        if (this.meta.scanned && !this.meta.scanComplete) this.meta.pdfMode = 'page';
         this.settings.pdfMode = this.meta.pdfMode || 'page';                            // each PDF remembers its view
         this.applySettings();
         await this.makePdfReader(this.meta.loc);
         if (!this.meta.cover) this.pdfCover();
-        if (this.meta.scanned && this.settings.pdfMode === 'reflow') setTimeout(() => this.name === name && BookScanner.start(name, this.reader.location().loc.page || 1), 1500);
-        if (this.meta.scanned && this.settings.pdfMode !== 'reflow' && !this.meta.ocrHinted) {
-          this.meta.ocrHinted = true;
-          this.saveMeta();
-          setTimeout(() => toast('A scanned book! Open Aa → Text only and Kitab will turn the pages into clear text.', 6000), 1200);
-        }
+        if (this.meta.scanned && !this.meta.scanComplete) setTimeout(() => this.name === name && BookScanner.start(name, this.reader.location().loc.page || 1), 1500);
+        this.showScanState(OCR.current && OCR.current.label);
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
         await this.reader.open(this.meta.loc);
@@ -620,6 +618,14 @@ const App = {
     const m = this.meta;
     const total = m && m.scanTotal, done = m && m.scanDone;
     const book = total ? (done >= total ? '✓ The whole book is saved as text' : `Text ready for ${done} of ${total} pages`) : '';
+    // "Text only" stays greyed out until every page of a scanned book has its text
+    const btn = $('.seg[data-setting="pdfMode"] button[data-v="reflow"]');
+    if (btn) {
+      const waiting = !!(m && m.scanned && !m.scanComplete);
+      btn.classList.toggle('disabled', waiting);
+      btn.setAttribute('aria-disabled', waiting);
+      btn.textContent = waiting ? `Text ${total ? Math.round((done || 0) / total * 100) : 0}%` : 'Text only';
+    }
     el.classList.toggle('hidden', !label && !book);
     el.innerHTML = (label && !(done >= total) ? '<span class="mini-spin"></span>' : '') +
       `<span>${label ? `Scanning ${esc(label)}${book ? ' · ' : ''}` : ''}${book}</span>` +
@@ -634,7 +640,7 @@ const App = {
     if (finished) meta.scanComplete = done >= total;
     store.set(this.bookKey(name), meta);
     if (name === this.name) this.showScanState(OCR.current && OCR.current.label);
-    if (finished && done >= total) toast(`“${meta.title || prettyName(name)}” is saved as text. No more scanning needed.`, 4500);
+    if (finished && done >= total) toast(`“${meta.title || prettyName(name)}” is ready: Aa → Text only is now available.`, 4500);
     if (!this.reader && this.tab === 'library' && (finished || done % 5 === 0)) this.renderLibrary();
   },
 
@@ -737,7 +743,12 @@ const App = {
       b.onclick = () => this.set(b.dataset.step, clamp(this.settings[b.dataset.step] + Number(b.dataset.d), 12, 40));
     });
     $$('.seg[data-setting]').forEach((seg) => {
-      seg.querySelectorAll('button').forEach((b) => { b.onclick = () => this.set(seg.dataset.setting, b.dataset.v); });
+      seg.querySelectorAll('button').forEach((b) => {
+        b.onclick = () => {
+          if (b.classList.contains('disabled')) { toast('Still preparing the text. Keep reading the original; this lights up when every page is ready.', 3500); return; }
+          this.set(seg.dataset.setting, b.dataset.v);
+        };
+      });
     });
     $$('input[type=range][data-setting]').forEach((r) => {
       r.oninput = () => this.set(r.dataset.setting, Number(r.value), true);
@@ -760,12 +771,9 @@ const App = {
       if (this.meta) { this.meta.pdfMode = value; this.saveMeta(); }
       const l = this.reader.location().loc;
       this.closePanels();
-      busy(true, value === 'reflow' ? (this.meta && this.meta.scanned ? 'Reading the scanned page…' : 'Getting the text…') : 'Showing the pages…');
+      busy(true, value === 'reflow' ? 'Getting the text…' : 'Showing the pages…');
       this._opening = true;
       this.makePdfReader({ page: l.page })
-        .then(() => {   // then scan the whole book once, in the background (after the page is on screen)
-          if (value === 'reflow' && this.meta && this.meta.scanned) setTimeout(() => this.name && BookScanner.start(this.name, l.page || 1), 1500);
-        })
         .catch((e) => toast('Could not show the text: ' + (e.message || e), 4000))
         .finally(() => { this._opening = false; busy(false); this.toggleUi(false); this.onRelocated(); });
     } else if (layoutKeys.includes(key) || (key === 'theme' && this.reader instanceof EpubReader)) {
