@@ -735,6 +735,7 @@ const ScanStore = {
   },
   clear(book) {
     if (this.native() && Android.deleteScans) Android.deleteScans(book);
+    WordStore.clearBook(book);
     try { Object.keys(localStorage).filter((k) => k.startsWith(`er.ocr3.${book}.`)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* fine */ }
   },
 };
@@ -775,10 +776,47 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner, force) {
   }
 }
 
+/** Where the words of a scanned page are (for selecting on the original page), kept on the phone. Separate from the page text. */
+const WordStore = {
+  key: (b, n) => `er.wd:${b}:${n}`,
+  get(b, n) { try { const v = localStorage.getItem(this.key(b, n)); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
+  put(b, n, words) {
+    const v = JSON.stringify(words), k = this.key(b, n);
+    try { localStorage.setItem(k, v); } catch (e) {
+      this.clearAll();                                  // out of room: start fresh, they are quick to make again
+      try { localStorage.setItem(k, v); } catch (x) { /* give up quietly */ }
+    }
+  },
+  clearBook(b) { try { Object.keys(localStorage).filter((k) => k.startsWith(`er.wd:${b}:`)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignore */ } },
+  clearAll() { try { Object.keys(localStorage).filter((k) => k.startsWith('er.wd:')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignore */ } },
+};
+
+/** The words of one page and where they are: from the saved scan, else a quick words-only read (about half the work of a full scan). */
+async function pageWords(pdf, n, key, high) {
+  const hit = WordStore.get(key, n);
+  if (hit) return hit;
+  const saved = ScanStore.get(key, n), m = saved && /<!--W:(\[.*?\])-->/s.exec(saved);
+  if (m) { try { return JSON.parse(m[1]); } catch (e) { /* read it again */ } }
+  return OCR.schedule(`${key}:w${n}`, `words ${n}`, async (worker) => {
+    const page = await pdf.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: Math.min(1200 / base.width, 1740 / base.height) });
+    const c = document.createElement('canvas');
+    c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: x, viewport: vp }).promise;
+    const { data } = await worker.recognize(c);
+    const words = OCR.boxes(data, c);
+    WordStore.put(key, n, words);
+    return words;
+  }, high, 'reader');
+}
+
 /** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
 function scanFailedHtml(n, e) {
   const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
-  const body = `Kitab 1.9 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const body = `Kitab 1.9.1 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
   const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
   return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
     <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
@@ -1044,12 +1082,20 @@ class PdfPageReader {
   }
 
   /** For a scanned page: invisible words placed where the scanner found them. */
-  scannedLayer(page, box, scale, crop, base) {
-    const html = ScanStore.get(this.app.name, page.pageNumber);
-    const m = html && /<!--W:(\[.*?\])-->/s.exec(html);
-    if (!m || !box.isConnected) return;
-    let words;
-    try { words = JSON.parse(m[1]); } catch (e) { return; }
+  scannedLayer(page, box, scale, crop, base, given) {
+    if (!box.isConnected) return;
+    let words = given;
+    if (!words) {
+      const html = ScanStore.get(this.app.name, page.pageNumber);
+      const m = html && /<!--W:(\[.*?\])-->/s.exec(html);
+      if (m) { try { words = JSON.parse(m[1]); } catch (e) { words = null; } }
+      if (!words) words = WordStore.get(this.app.name, page.pageNumber);
+    }
+    if (!words || !words.length) {                        // not known yet: get them now, and for the pages just ahead
+      this.wantWords(page.pageNumber, true);
+      if (this.app.meta && this.app.meta.scanned) for (const k of [page.pageNumber + 1, page.pageNumber + 2]) if (k <= this.pdf.numPages) this.wantWords(k, false);
+      return;
+    }
     box.querySelector('.textLayer')?.remove();
     const W = base.width * scale, H = base.height * scale;
     const layer = document.createElement('div');
@@ -1066,6 +1112,27 @@ class PdfPageReader {
     box.appendChild(layer);
     const nat = spans.map((sp) => sp.getBoundingClientRect().width);     // read all sizes first, then write
     spans.forEach((sp, i) => { if (nat[i] > 0) sp.style.transform = `scaleX(${sp._w / nat[i]})`; });
+  }
+
+  /** Gets the words of page n ready (started as soon as a page shows, and for the next two), so selecting is instant by the time you try. */
+  wantWords(n, high) {
+    this._ww = this._ww || {};
+    if (!this._ww[n]) {
+      this._ww[n] = pageWords(this.pdf, n, this.app.name, high)
+        .then((words) => { this.applyWords(n, words); return words; })
+        .catch(() => { delete this._ww[n]; return null; });
+    } else if (high) OCR.promote(`${this.app.name}:w${n}`);
+    return this._ww[n];
+  }
+
+  applyWords(n, words) {
+    for (const b of this.boxes()) {
+      if (b._n !== n || b.querySelector('.textLayer span')) continue;
+      this.pdf.getPage(n).then((pg) => {
+        const base = pg.getViewport({ scale: 1 }), c = b._crop;
+        this.scannedLayer(pg, b, b.offsetWidth / (base.width * (c.x1 - c.x0)), c, base, words);
+      });
+    }
   }
 
   /** A page finished scanning while it is on screen: make its words selectable. */

@@ -674,17 +674,14 @@ const App = {
     if (on) { this.toggleUi(false); toast('Tap a sentence to select it. Press and hold to pick your own words.', 3500); }
   },
 
-  /** A page with no selectable words (a scan): read it now, so it can be selected in a few seconds. */
+  /** A page with no selectable words yet (a scan): it is being prepared; say so, and tell when it is ready. */
   ensureWords(n) {
     if (!(this.reader instanceof PdfPageReader) || !this.pdf || !this.name) return;
-    this._asked = this._asked || {};
-    if (this._asked[n]) { toast('Still reading this page. A few more seconds…', 2500); return; }
-    this._asked[n] = 1;
-    toast('Reading this page so you can select it. About 10 seconds…', 6000);
     const name = this.name;
-    ocrPageHtml(this.pdf, n, name, () => {}, false, 'reader', true).then((html) => {
-      if (/scan-fail/.test(html)) { delete this._asked[n]; toast('Could not read this page for selecting.', 3500); }
-      else if (this.name === name && this.reader instanceof PdfPageReader) toast('Ready: press and hold a word.', 3000);
+    toast('Getting this page ready to select…', 4000);
+    this.reader.wantWords(n, true).then((words) => {
+      if (this.name !== name || !(this.reader instanceof PdfPageReader)) return;
+      toast(words && words.length ? 'Ready: press and hold a word.' : 'No readable words found on this page.', 3000);
     });
   },
 

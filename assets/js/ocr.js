@@ -194,7 +194,10 @@ const OCR = {
   /** Where each word is on the page, as thousandths of the page: [text, left, top, right, bottom]. Used to select words on the original page. */
   boxes(data, canvas, map) {
     const W = canvas.width, H = canvas.height, out = [];
+    const hs = (data.words || []).filter((w) => w.confidence > 40).map((w) => w.bbox.y1 - w.bbox.y0).sort((x, y) => x - y);
+    const typical = hs.length ? hs[hs.length >> 1] : 0;            // a word far taller than the rest is an ornament or a drop cap
     for (const w of data.words || []) {
+      if (typical && w.bbox.y1 - w.bbox.y0 > typical * 2.6) continue;
       const t = (w.text || '').trim();
       if (!t || !/[A-Za-z0-9]/.test(t) || w.confidence < 20 || w.bbox.y1 <= w.bbox.y0 || w.bbox.x1 <= w.bbox.x0) continue;   // no ornament specks
       const b = map ? map(w.bbox) : w.bbox;
