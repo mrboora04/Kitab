@@ -481,3 +481,144 @@ body.hl-mode .tv { cursor: text; }
 .hl-r[data-c="p"] { background: color-mix(in srgb, var(--hl-p) 52%, transparent); }
 .hl-r[data-c="u"] { background: none; border-bottom: 2px solid var(--accent); border-radius: 0; }
 .pdf-page .textLayer.scanned { white-space: pre; }
+
+
+/* =====================================================================
+ * Clean look (the default style): flat, quiet, system fonts, hairlines, soft shadows.
+ * Everything here is scoped to body:not(.funky), so the Funky style is untouched.
+ * =================================================================== */
+:root { --tab-h: 54px; --ease: cubic-bezier(.32, .72, 0, 1); }
+body:not(.funky) {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.ico { width: 24px; height: 24px; display: block; }
+.icon .ico { width: 23px; height: 23px; }
+
+/* Library header: a large title, quiet actions */
+body:not(.funky) .lib-head { align-items: flex-end; margin-bottom: 10px; }
+body:not(.funky) .lib-head h1 { font: 800 34px/1.1 -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, system-ui, sans-serif; letter-spacing: -.7px; }
+body:not(.funky) .lib-head p { font-size: 13px; margin-top: 2px; }
+body:not(.funky) .head-actions .icon { color: var(--accent); width: 40px; }
+body:not(.funky) .btn.primary { background: none; color: var(--accent); box-shadow: none; border: 0; padding: 10px 6px 10px 10px; font-size: 17px; font-weight: 600; }
+body:not(.funky) #libSearch input { background: color-mix(in srgb, var(--fg) 7%, transparent); border: 0; border-radius: 12px; }
+
+/* Filters: quiet pills */
+body:not(.funky) .chips { gap: 6px; padding-bottom: 16px; }
+body:not(.funky) .chip { border: 0; background: color-mix(in srgb, var(--fg) 7%, transparent); padding: 7px 14px; font-size: 14px; font-weight: 500; transition: background .2s, color .2s; }
+body:not(.funky) .chip.on { background: var(--fg); color: var(--bg); }
+body:not(.funky) .chips .chip i { opacity: .55; }
+
+/* Continue reading */
+body:not(.funky) .continue { border: 0; border-radius: 16px; padding: 14px; background: var(--panel); box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06); margin-bottom: 26px; transition: transform .2s var(--ease); }
+body:not(.funky) .continue:active { transform: scale(.985); }
+body:not(.funky) .continue .label { font-size: 11px; letter-spacing: .09em; }
+body:not(.funky) .continue h3 { font: 700 18px/1.25 -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, system-ui, sans-serif; letter-spacing: -.2px; }
+body:not(.funky) .continue .cover { width: 62px; }
+
+/* Ideas strip: calm */
+body:not(.funky) .suggest { margin-bottom: 22px; }
+body:not(.funky) .idea { border: 0; background: color-mix(in srgb, var(--fg) 6%, transparent); border-radius: 12px; padding: 8px 13px; }
+body:not(.funky) .idea b { font: 600 14px -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; }
+body:not(.funky) .idea-lead { font-size: 11px; letter-spacing: .08em; color: var(--muted); }
+
+/* The shelf: three covers across, straight and still */
+body:not(.funky) .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px 16px; }
+body:not(.funky) .book { gap: 8px; transition: transform .2s var(--ease), opacity .2s; }
+body:not(.funky) .book:active { transform: scale(.96); opacity: .85; }
+body:not(.funky) .cover { border-radius: 3px 6px 6px 3px; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.14), 0 10px 18px rgba(0,0,0,.10); }
+body:not(.funky) .cover::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: linear-gradient(90deg, rgba(255,255,255,.22) 0, rgba(255,255,255,0) 6%, rgba(0,0,0,.06) 7%, rgba(0,0,0,0) 12%); }
+body:not(.funky) .cover .gen { font: 700 13px/1.2 Georgia, "Noto Serif", serif; }
+body:not(.funky) .book .title { font-size: 12.5px; font-weight: 600; line-height: 1.25; padding-right: 20px; }
+body:not(.funky) .book .meta { font-size: 11.5px; }
+body:not(.funky) .book .more { top: auto; bottom: 0; right: -4px; width: 30px; height: 26px; border-radius: 0; background: none; color: var(--muted); font-size: 18px; line-height: 26px; }
+body:not(.funky) .cover .bar { height: 3px; background: rgba(0,0,0,.18); }
+
+/* Tab bar: translucent, hairline, line icons */
+body:not(.funky) .pane { inset: 0 0 calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)) 0; padding-top: calc(14px + var(--top-safe)); }
+body:not(.funky) #navbar { height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: saturate(1.8) blur(20px); -webkit-backdrop-filter: saturate(1.8) blur(20px); border-top: .5px solid var(--line); }
+body:not(.funky) #navbar button { font-size: 10.5px; font-weight: 500; letter-spacing: .01em; gap: 3px; padding-top: 4px; transition: color .15s, transform .15s var(--ease); }
+body:not(.funky) #navbar button:active { transform: scale(.92); }
+body:not(.funky) #navbar button span { display: flex; font-size: 0; filter: none; opacity: 1; }
+body:not(.funky) #navbar button.on { font-weight: 600; }
+body:not(.funky) #navbar button.on .ico { stroke-width: 2.1; }
+
+/* Lists (Browse, History, catalog rows) */
+body:not(.funky) .source, body:not(.funky) #pane-more .more-card { border: 0; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+body:not(.funky) .li { border-bottom: .5px solid var(--line); }
+body:not(.funky) .thumb { border-radius: 3px; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.18); }
+body:not(.funky) .feed-head h2 { font: 700 20px -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; letter-spacing: -.3px; }
+body:not(.funky) .row-text b { font-weight: 600; }
+body:not(.funky) .subhead { letter-spacing: .06em; font-weight: 600; }
+body:not(.funky) .search input { background: color-mix(in srgb, var(--fg) 7%, transparent); border: 0; border-radius: 12px; }
+body:not(.funky) #pane-more .more-card h3 { font-weight: 700; letter-spacing: -.1px; }
+
+/* Reader bars: full-width glass with a hairline */
+body:not(.funky) .bar { background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: saturate(1.8) blur(22px); -webkit-backdrop-filter: saturate(1.8) blur(22px); box-shadow: none; transition: transform .32s var(--ease), opacity .25s; }
+body:not(.funky) .bar.top { border-bottom: .5px solid var(--line); padding: calc(6px + var(--top-safe)) 4px 6px; }
+body:not(.funky) .bar.bottom { border-top: .5px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
+body:not(.funky) .bar-title { align-items: center; text-align: center; padding: 0 4px; }
+body:not(.funky) .bar-title b { font-size: 15px; font-weight: 600; max-width: 100%; }
+body:not(.funky) .bar-title small { font-size: 11.5px; }
+body:not(.funky) .bar .icon { color: var(--accent); border-radius: 10px; }
+body:not(.funky) #settingsBtn { font: 600 19px/1 -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; letter-spacing: -.5px; }
+body:not(.funky) #prevBtn, body:not(.funky) #nextBtn { display: none; }
+body:not(.funky) .row.small { justify-content: center; padding-top: 4px; font-size: 12px; }
+body:not(.funky) #progressLabel { text-align: center; }
+
+/* Sliders, everywhere: thin track, round white thumb */
+input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; height: 28px; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 16%, transparent); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: #fff; border: .5px solid rgba(0,0,0,.18); box-shadow: 0 2px 6px rgba(0,0,0,.28); }
+
+/* Settings sheet: grouped rows, segmented controls, green switches */
+body:not(.funky) .scrim { background: rgba(0,0,0,.32); transition: opacity .3s var(--ease); }
+body:not(.funky) .drawer, body:not(.funky) .sheet { transition: transform .38s var(--ease); }
+body:not(.funky) .sheet { border-radius: 14px 14px 0 0; padding: 4px 16px calc(24px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--panel) 94%, var(--bg)); box-shadow: 0 -10px 40px rgba(0,0,0,.18); }
+body:not(.funky) .sheet-grip { width: 36px; height: 5px; background: color-mix(in srgb, var(--fg) 22%, transparent); margin: 6px auto 12px; }
+body:not(.funky) .sheet .set-row { border-bottom: .5px solid var(--line); min-height: 50px; padding: 4px 0; }
+body:not(.funky) .sheet .set-row > label { font-size: 15px; }
+body:not(.funky) .seg { border: 0; background: color-mix(in srgb, var(--fg) 8%, transparent); border-radius: 9px; padding: 2px; gap: 2px; overflow: visible; }
+body:not(.funky) .seg button { border: 0 !important; border-radius: 7px; padding: 7px 4px; font-size: 13px; font-weight: 500; transition: background .2s, box-shadow .2s; }
+body:not(.funky) .seg button.on { background: var(--bg); color: var(--fg); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.04); }
+body:not(.funky) .stepper { border: 0; background: color-mix(in srgb, var(--fg) 8%, transparent); border-radius: 9px; }
+body:not(.funky) .stepper button { color: var(--fg); }
+body:not(.funky) .swatches button { border: 0; box-shadow: 0 0 0 .5px rgba(0,0,0,.2); width: 38px; height: 38px; }
+body:not(.funky) .swatches button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+body:not(.funky) .switch { width: 51px; height: 31px; border-radius: 16px; background: color-mix(in srgb, var(--fg) 18%, transparent); }
+body:not(.funky) .switch::after { width: 27px; height: 27px; top: 2px; left: 2px; box-shadow: 0 2px 5px rgba(0,0,0,.3); transition: transform .25s var(--ease); }
+body:not(.funky) .switch:checked { background: #34c759; }
+body:not(.funky) .switch:checked::after { transform: translateX(20px); }
+body:not(.funky) .tool { border: 0; background: color-mix(in srgb, var(--fg) 6%, transparent); border-radius: 12px; }
+body:not(.funky) .tool.listen { background: color-mix(in srgb, var(--fg) 6%, transparent); border: 0; }
+body:not(.funky) .tool.on { background: var(--accent); }
+body:not(.funky) .hint { font-size: 12px; }
+
+/* Contents / highlights drawer */
+body:not(.funky) .drawer { box-shadow: -10px 0 40px rgba(0,0,0,.18); }
+body:not(.funky) .tab { font-size: 15px; }
+body:not(.funky) .list button { border-bottom: .5px solid var(--line); }
+
+/* Alerts and menus */
+body:not(.funky) .dialog { background: rgba(0,0,0,.4); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+body:not(.funky) .dialog-box { border-radius: 16px; padding: 22px 20px 0; text-align: center; max-width: 320px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+body:not(.funky) .dialog-box h3 { font: 700 17px -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; }
+body:not(.funky) .dialog-box p { color: var(--muted); font-size: 13.5px; }
+body:not(.funky) .dialog-box input { text-align: left; margin-bottom: 4px; }
+body:not(.funky) .dialog-actions { margin: 18px -20px 0; gap: 0; border-top: .5px solid var(--line); }
+body:not(.funky) .dialog-actions .btn { flex: 1; border: 0; border-radius: 0; padding: 14px 8px; font-size: 17px; font-weight: 400; color: var(--accent); background: none; box-shadow: none; }
+body:not(.funky) .dialog-actions .btn + .btn { border-left: .5px solid var(--line); font-weight: 600; }
+body:not(.funky) .dialog-actions .btn.danger { color: #ff3b30; background: none; }
+body:not(.funky) .menu { border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.28); }
+body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); color: var(--bg); border-radius: 14px; }
+
+/* Selection bar and look-up sheet match */
+.hlbar { border-radius: 14px; }
+.lookup { border-radius: 14px 14px 0 0; transition: none; }
+
+@media (prefers-reduced-motion: reduce) { body:not(.funky) * { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+.speed small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.tool.listen > button .ico { width: 20px; height: 20px; }
+.tool.listen > button span { display: flex; }
+#reader.ui .page-info { opacity: 0; transition: opacity .2s; }

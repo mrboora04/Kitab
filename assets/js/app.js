@@ -15,7 +15,7 @@ const DEFAULTS = {
   theme: 'paper', fontSize: 19, font: 'serif', lineHeight: 1.6, margin: 20, measure: 48, frame: true,
   flow: 'paged', pdfMode: 'page', pdfTrim: true, brightness: null, warmth: 0, ttsRate: 1,
   tapZones: true, volumeKeys: true, keepAwake: true, fullscreen: false,
-  ui: 'funky', accent: 'ember', eyeEvery: '30', eyeInsist: true, eyeRest: '2', protect: true,
+  ui: 'classic', accent: 'ember', eyeEvery: '30', eyeInsist: true, eyeRest: '2', protect: true,
 };
 const BAR_COLORS = { paper: '#fbf8f2', sepia: '#f1e6cf', mint: '#e2eddd', dusk: '#2a2b2f', night: '#000000' };
 const COVER_COLORS = [['#c45c34', '#7d3420'], ['#3c6e8f', '#1f3b52'], ['#4f7d4a', '#2b4a28'], ['#8a5a9e', '#4c2d5c'], ['#b0893a', '#6b511c'], ['#5d6470', '#2f343b']];
@@ -78,6 +78,7 @@ const App = {
 
   /* ---------------- startup ---------------- */
   init() {
+    if (!this.settings.uiv) { this.settings.ui = 'classic'; this.settings.uiv = 2; store.set('er.settings', this.settings); }   // 1.9: the clean look is the default
     try { Object.keys(localStorage).filter((k) => k.startsWith('er.ocr.') || k.startsWith('er.ocr2.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* older, lower-quality scans are re-read */ }
     this.applySettings(true);
     this.bindLibrary();
@@ -869,7 +870,7 @@ const App = {
   async startTts() {
     if (!Native.canSpeak()) { toast('Text-to-speech is not available. Install or enable a voice in Android settings.'); return; }
     this.tts = true;
-    $('#ttsBtn').innerHTML = '<span>⏸</span>Stop listening';
+    $('#ttsBtn').innerHTML = '<span><svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></span>Stop listening';
     $('#ttsBtn').classList.add('on');
     this.toggleUi(false);
     this.speakPage();
@@ -890,7 +891,7 @@ const App = {
     if (!this.tts) return;
     this.tts = false;
     Native.stopSpeaking();
-    $('#ttsBtn').innerHTML = '<span>🔊</span>Listen';
+    $('#ttsBtn').innerHTML = '<span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>Listen';
     $('#ttsBtn').classList.remove('on');
   },
 

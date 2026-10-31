@@ -13,13 +13,13 @@
   <div id="pane-library" class="pane">
     <header class="lib-head">
       <div>
-        <h1>Kitab</h1>
+        <h1>Library</h1>
         <p class="muted" id="libCount">Your books</p>
       </div>
       <div class="head-actions">
-        <button id="searchBtn" class="icon" aria-label="Search library">🔍</button>
-        <button id="sortBtn" class="icon" aria-label="Sort">⇅</button>
-        <button id="addBtn" class="btn primary">+ Add</button>
+        <button id="searchBtn" class="icon" aria-label="Search library"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+        <button id="sortBtn" class="icon" aria-label="Sort"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 20V4M7 20l-3-3M7 20l3-3M17 4v16M17 4l-3 3M17 4l3 3"/></svg></button>
+        <button id="addBtn" class="btn primary">Add</button>
       </div>
     </header>
     <div id="libSearch" class="search hidden"><input id="libQuery" type="search" placeholder="Search title or author" autocomplete="off"></div>
@@ -70,7 +70,7 @@
     <header class="lib-head"><div><h1>Make it yours</h1><p class="muted">Look, eye care and privacy</p></div></header>
 
     <section class="more-card">
-      <h3>🎨 Look</h3>
+      <h3>Look</h3>
       <div class="set-row stack"><label>Style</label>
         <div class="seg" data-setting="ui"><button data-v="classic">Classic</button><button data-v="funky">Funky</button></div></div>
       <div class="set-row stack"><label>Colour</label>
@@ -88,7 +88,7 @@
     </section>
 
     <section class="more-card">
-      <h3>👀 Eye care</h3>
+      <h3>Eye care</h3>
       <div class="set-row stack"><label>Break reminder</label>
         <div class="seg" data-setting="eyeEvery"><button data-v="0">Off</button><button data-v="20">20m</button><button data-v="30">30m</button><button data-v="45">45m</button><button data-v="60">1h</button></div></div>
       <div class="set-row"><label>Insist after 2 skips</label><input type="checkbox" class="switch" data-setting="eyeInsist"></div>
@@ -98,7 +98,7 @@
     </section>
 
     <section class="more-card">
-      <h3>🔒 Privacy</h3>
+      <h3>Privacy</h3>
       <div class="set-row"><label>Block screenshots of book pages</label><input type="checkbox" class="switch" data-setting="protect"></div>
       <p class="hint">No ads, no account, no tracking. Kitab only uses the internet when you browse catalogs, and your books and notes never leave your phone.</p>
     </section>
@@ -107,10 +107,10 @@
   </div>
 
   <nav id="navbar">
-    <button data-tab="library" class="on"><span>📚</span>Library</button>
-    <button data-tab="browse"><span>🌐</span>Browse</button>
-    <button data-tab="history"><span>🕘</span>History</button>
-    <button data-tab="more"><span>✨</span>More</button>
+    <button data-tab="library" class="on"><span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 5.8C5.3 4.6 8.7 4.8 12 6.8c3.3-2 6.7-2.2 9.5-1v12.9c-2.8-1.2-6.2-1-9.5 1-3.3-2-6.7-2.2-9.5-1z"/><path d="M12 6.8v12.9"/></svg></span>Library</button>
+    <button data-tab="browse"><span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.8 8.2l-2.1 5.5-5.5 2.1 2.1-5.5z"/></svg></span>Browse</button>
+    <button data-tab="history"><span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 1.9"/></svg></span>History</button>
+    <button data-tab="more"><span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/></svg></span>More</button>
   </nav>
 
 
@@ -156,10 +156,10 @@
   <div id="warmth" class="warmth"></div>
 
   <header id="topbar" class="bar top">
-    <button class="icon" id="backBtn" aria-label="Back to library">←</button>
+    <button class="icon" id="backBtn" aria-label="Back to library"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="bar-title"><b id="bookTitle"></b><small id="chapterTitle"></small></div>
-    <button class="icon" id="hlBtn" aria-label="Select text"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" stroke-dasharray="3.2 3"/><path d="M9.5 7h5M9.5 17h5M12 7v10"/></svg></button>
-    <button class="icon" id="tocBtn" aria-label="Contents">☰</button>
+    <button class="icon" id="hlBtn" aria-label="Select text"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" stroke-dasharray="3 3"/><path d="M9.5 7.5h5M9.5 16.5h5M12 7.5v9"/></svg></button>
+    <button class="icon" id="tocBtn" aria-label="Contents"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".9" fill="currentColor"/><circle cx="4.5" cy="12" r=".9" fill="currentColor"/><circle cx="4.5" cy="18" r=".9" fill="currentColor"/></svg></button>
     <button class="icon" id="settingsBtn" aria-label="Reading settings">Aa</button>
   </header>
 
@@ -188,8 +188,8 @@
     <div class="sheet-grip"></div>
     <div class="tools">
       <div class="tool listen">
-        <button id="ttsBtn"><span>🔊</span>Listen</button>
-        <label class="speed" aria-label="Reading speed"><span>🐢</span><input type="range" min="0.5" max="2" step="0.1" data-setting="ttsRate"><span>🐇</span><b id="ttsRateLbl">1.0×</b></label>
+        <button id="ttsBtn"><span><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>Listen</button>
+        <label class="speed" aria-label="Reading speed"><small>Slower</small><input type="range" min="0.5" max="2" step="0.1" data-setting="ttsRate"><small>Faster</small><b id="ttsRateLbl">1.0×</b></label>
       </div>
     </div>
     <div class="set-row pdf-only pdf-page-only">
