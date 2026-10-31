@@ -196,7 +196,7 @@ const OCR = {
     const W = canvas.width, H = canvas.height, out = [];
     for (const w of data.words || []) {
       const t = (w.text || '').trim();
-      if (!t || w.confidence < 20 || w.bbox.y1 <= w.bbox.y0 || w.bbox.x1 <= w.bbox.x0) continue;
+      if (!t || !/[A-Za-z0-9]/.test(t) || w.confidence < 20 || w.bbox.y1 <= w.bbox.y0 || w.bbox.x1 <= w.bbox.x0) continue;   // no ornament specks
       const b = map ? map(w.bbox) : w.bbox;
       out.push([t, Math.round(b.x0 / W * 1000), Math.round(b.y0 / H * 1000), Math.round(b.x1 / W * 1000), Math.round(b.y1 / H * 1000)]);
     }

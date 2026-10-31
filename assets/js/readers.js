@@ -739,9 +739,9 @@ const ScanStore = {
   },
 };
 
-async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
+async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner, force) {
   const hit = ScanStore.get(key, n);
-  if (hit != null) return hit;
+  if (hit != null && !(force && !/<!--W:/.test(hit))) return hit;      // force: a page scanned before word positions were kept
   if (!quiet) onStatus(`Scanning page ${n} of ${pdf.numPages}…`);
   try {
     const html = await OCR.schedule(`${key}:${n}`, `page ${n}`, async (worker) => {
@@ -778,7 +778,7 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner) {
 /** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
 function scanFailedHtml(n, e) {
   const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
-  const body = `Kitab 1.8 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const body = `Kitab 1.8.3 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
   const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
   return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
     <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
@@ -879,6 +879,44 @@ class PdfPageReader {
     });
     this._resize = () => this.relayout();
     window.addEventListener('resize', this._resize);
+    // Press and hold: if the phone does not start a selection by itself, select the word under the finger
+    const cancel = () => clearTimeout(this._lpT);
+    this.wrap.addEventListener('touchstart', (e) => {
+      cancel();
+      if (e.touches.length !== 1) return;
+      this._lp = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      this._lpT = setTimeout(() => this.longPress(), 650);
+    }, { passive: true });
+    this.wrap.addEventListener('touchmove', (e) => {
+      const t = e.touches[0];
+      if (this._lp && t && Math.hypot(t.clientX - this._lp.x, t.clientY - this._lp.y) > 12) cancel();
+    }, { passive: true });
+    this.wrap.addEventListener('touchend', cancel, { passive: true });
+    this.wrap.addEventListener('touchcancel', cancel, { passive: true });
+  }
+
+  longPress() {
+    const sel = window.getSelection();
+    if (!this._lp || (sel && !sel.isCollapsed)) return;           // the phone already started a selection
+    const { x, y } = this._lp;
+    if (this.selectAt(x, y)) return;
+    const el = document.elementFromPoint(x, y);
+    const box = el && el.closest && el.closest('.pdf-page');
+    if (box && box._n && !box.querySelector('.textLayer span')) this.app.ensureWords(box._n);   // no words on this page yet
+  }
+
+  /** Select mode: a tap on another word stretches the selection to it. */
+  extendTo(x, y) {
+    const sel = window.getSelection();
+    const cur = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0).cloneRange() : this._lastRange;   // a tap may already have cleared it
+    if (!cur) return false;
+    const w = this.wordAt(x, y);
+    if (!w) return false;
+    const r = cur.cloneRange();
+    if (w.compareBoundaryPoints(Range.START_TO_START, cur) < 0) r.setStart(w.startContainer, w.startOffset);
+    if (w.compareBoundaryPoints(Range.END_TO_END, cur) > 0) r.setEnd(w.endContainer, w.endOffset);
+    sel.removeAllRanges(); sel.addRange(r);
+    return true;
   }
 
   get paged() { return this.app.settings.flow === 'paged'; }
@@ -1075,17 +1113,24 @@ class PdfPageReader {
     return null;
   }
 
-  /** Selects the word under the finger (the reader can then drag the handles). */
-  selectAt(x, y) {
+  /** The word under a point on the page's text layer, as a range (null when there is none). */
+  wordAt(x, y) {
     const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
-    if (!r || r.startContainer.nodeType !== 3 || !r.startContainer.parentElement.closest('.textLayer')) return false;
+    if (!r || r.startContainer.nodeType !== 3 || !r.startContainer.parentElement.closest('.textLayer')) return null;
     const t = r.startContainer.data;
     let a = r.startOffset, b = r.startOffset;
     while (a > 0 && /[\w'’-]/.test(t[a - 1])) a--;
     while (b < t.length && /[\w'’-]/.test(t[b])) b++;
-    if (b <= a) return false;
+    if (b <= a) return null;
     const range = document.createRange();
     range.setStart(r.startContainer, a); range.setEnd(r.startContainer, b);
+    return range;
+  }
+
+  /** Selects the word under the finger (the reader can then drag the handles). */
+  selectAt(x, y) {
+    const range = this.wordAt(x, y);
+    if (!range) return false;
     const sel = window.getSelection();
     sel.removeAllRanges(); sel.addRange(range);
     return true;
@@ -1108,6 +1153,7 @@ class PdfPageReader {
     }
     const text = sel.toString().replace(/\s+/g, ' ').trim();
     if (!rects.length || !text) return null;
+    this._lastRange = range.cloneRange();
     const rr = range.getBoundingClientRect();
     return { h: { page: box._n, rects, text }, rect: { top: rr.top, bottom: rr.bottom, left: rr.left, right: rr.right } };
   }

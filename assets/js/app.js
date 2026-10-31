@@ -479,6 +479,7 @@ const App = {
   /* ---------------- navigation & gestures ---------------- */
   onTap(x, e) {
     if (!$('#lookup').classList.contains('hidden')) { $('#lookup').classList.add('hidden'); return; }
+    if (this.hlMode && this.hlBarOpen() && this.hlState && !this.hlState.id && e && this.reader.extendTo && this.reader.extendTo(e.clientX, e.clientY)) return;   // select mode: stretch the selection
     if (this.hlBarOpen()) return this.hideHlBar(true);
     if (this.panelOpen()) return this.closePanels();
     if (e && this.reader && this.reader.markAt) {                              // a tap on a highlight edits it
@@ -657,10 +658,12 @@ const App = {
   toggleHl(force) {
     const on = force != null ? force : !this.hlMode;
     const pdfOk = this.reader instanceof PdfPageReader && this.reader.canSelect();
+    if (on && this.reader instanceof PdfPageReader && !pdfOk) {      // a picture-only page: read it now so its words can be selected
+      this.ensureWords(this.reader.page);
+      return;
+    }
     if (on && !(this.reader instanceof TextReader || this.reader instanceof EpubReader || pdfOk)) {
-      toast(this.meta && this.meta.scanned && !this.meta.scanComplete
-        ? 'Select works in Text only, which lights up in Aa when your scan is done.'
-        : 'To select text, open Aa and choose Text only.', 4000);
+      toast('To select text, open Aa and choose Text only.', 4000);
       return;
     }
     this.hlMode = on;
@@ -668,6 +671,20 @@ const App = {
     document.body.classList.toggle('hl-mode', on);
     if (!on) this.hideHlBar(true);
     if (on) { this.toggleUi(false); toast('Tap a sentence to select it. Press and hold to pick your own words.', 3500); }
+  },
+
+  /** A page with no selectable words (a scan): read it now, so it can be selected in a few seconds. */
+  ensureWords(n) {
+    if (!(this.reader instanceof PdfPageReader) || !this.pdf || !this.name) return;
+    this._asked = this._asked || {};
+    if (this._asked[n]) { toast('Still reading this page. A few more seconds…', 2500); return; }
+    this._asked[n] = 1;
+    toast('Reading this page so you can select it. About 10 seconds…', 6000);
+    const name = this.name;
+    ocrPageHtml(this.pdf, n, name, () => {}, false, 'reader', true).then((html) => {
+      if (/scan-fail/.test(html)) { delete this._asked[n]; toast('Could not read this page for selecting.', 3500); }
+      else if (this.name === name && this.reader instanceof PdfPageReader) toast('Ready: press and hold a word.', 3000);
+    });
   },
 
   /* The colour bar: shown over a new selection, or over a highlight that was tapped. */
