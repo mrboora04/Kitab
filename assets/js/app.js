@@ -328,7 +328,7 @@ const App = {
     this.applySettings(true);
     try {
       if (type === 'pdf') {
-        this.pdf = await pdfjsLib.getDocument(Object.assign({ url }, PDF_OPTS, PDF_RANGE)).promise;   // read in pieces: a huge scan opens at once
+        this.pdf = await openPdf(url);   // read in pieces when the phone allows it, else whole
         const info = await this.pdf.getMetadata().catch(() => null);
         const t = info && info.info && info.info.Title;
         if (t && t.trim().length > 2 && !/^(untitled|microsoft word|scan)/i.test(t.trim()) && !this.meta.titleSet) this.meta.title = t.trim();
@@ -984,7 +984,7 @@ const BookScanner = {
     if (!meta.scanAll) { meta.scanAll = true; store.set(App.bookKey(name), meta); }
     let pdf;
     try {
-      pdf = await pdfjsLib.getDocument(Object.assign({ url: 'books/' + encodeURIComponent(name) }, PDF_OPTS, PDF_RANGE)).promise;
+      pdf = await openPdf('books/' + encodeURIComponent(name));
     } catch (e) { if (this.run === run) this.run = null; return; }
     const total = pdf.numPages;
     const start = Math.min(Math.max(1, fromPage || 1), total);

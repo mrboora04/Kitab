@@ -239,6 +239,10 @@ public class MainActivity extends Activity {
             } else if (path.startsWith("/books/")) {
                 File f = new File(booksDir, path.substring("/books/".length()));
                 if (!f.getCanonicalPath().startsWith(booksDir.getCanonicalPath())) throw new Exception("bad path");
+                if (uri.getQueryParameter("plain") != null) {
+                    in = new FileInputStream(f);     // the plain whole-file answer: the safe fallback when piece-by-piece loading does not work on a phone
+                    return new WebResourceResponse(mime, null, 200, "OK", headers, in);
+                }
                 // Books are served in pieces on request, so a 100 MB scan opens by reading only what it shows
                 long length = f.length();
                 String asked = null;

@@ -26,6 +26,30 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 // useWorkerFetch: false keeps all loading on the page, where the app's request handler sees it.
 /** Load a PDF in pieces (the app serves byte ranges) instead of reading the whole file first. */
 const PDF_RANGE = { disableAutoFetch: true };
+
+/**
+ * Opens a PDF. First the fast way (read in pieces, so a huge scan opens at once). If a phone's web view does not
+ * support that, or it stalls, fall back to loading the whole file, which always worked.
+ */
+async function openPdf(url) {
+  const task = pdfjsLib.getDocument(Object.assign({ url }, PDF_OPTS, PDF_RANGE));
+  try {
+    const pdf = await Promise.race([
+      (async () => {
+        const doc = await task.promise;
+        const page = await doc.getPage(1);
+        await page.getOperatorList();                 // proves the pieces really arrive, not just the first one
+        return doc;
+      })(),
+      new Promise((_, bad) => setTimeout(() => bad(new Error('slow')), 15000)),
+    ]);
+    return pdf;
+  } catch (e) {
+    try { task.destroy(); } catch (x) { /* already gone */ }
+    const data = new Uint8Array(await (await fetch(url + (url.includes('?') ? '&' : '?') + 'plain=1')).arrayBuffer());
+    return pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+  }
+}
 const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false };
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
