@@ -25,31 +25,51 @@ FONTS.book = FONTS.serif;
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 // useWorkerFetch: false keeps all loading on the page, where the app's request handler sees it.
 /** Load a PDF in pieces (the app serves byte ranges) instead of reading the whole file first. */
-const PDF_RANGE = { disableAutoFetch: true };
 
 /**
- * Opens a PDF. First the fast way (read in pieces, so a huge scan opens at once). If a phone's web view does not
- * support that, or it stalls, fall back to loading the whole file, which always worked.
+ * Opens a PDF. Every network read happens on the main page (a phone's web view only serves the app's files there,
+ * not to pdf.js's background worker). A small book is read whole. A big one is read in pieces, so it opens at once;
+ * if that does not work on this phone, or stalls, the whole file is read instead, which always worked.
  */
 async function openPdf(url) {
-  const task = pdfjsLib.getDocument(Object.assign({ url }, PDF_OPTS, PDF_RANGE));
+  const whole = async () => {
+    const data = new Uint8Array(await (await fetch(url + (url.includes('?') ? '&' : '?') + 'plain=1')).arrayBuffer());
+    return pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+  };
+  let task = null;
   try {
-    const pdf = await Promise.race([
+    const first = await fetch(url, { headers: { Range: 'bytes=0-262143' } });
+    const m = first.status === 206 && /\/(\d+)\s*$/.exec(first.headers.get('Content-Range') || '');
+    if (!m) {                                                  // pieces are not served: this answer is the whole file
+      if (first.status !== 200) throw new Error('not served');
+      return pdfjsLib.getDocument(Object.assign({ data: new Uint8Array(await first.arrayBuffer()) }, PDF_OPTS)).promise;
+    }
+    const total = Number(m[1]);
+    const head = new Uint8Array(await first.arrayBuffer());
+    if (total < 24e6) return await whole();                    // small: reading it all is quick
+    const transport = new pdfjsLib.PDFDataRangeTransport(total, head);
+    transport.requestDataRange = (begin, end) => {
+      fetch(url, { headers: { Range: `bytes=${begin}-${end - 1}` } })
+        .then((r) => { if (r.status !== 206 && r.status !== 200) throw new Error('piece failed'); return r.arrayBuffer(); })
+        .then((buf) => transport.onDataRange(begin, new Uint8Array(buf)))
+        .catch(() => { /* the watchdog below falls back to the whole file */ });
+    };
+    task = pdfjsLib.getDocument(Object.assign({ range: transport, length: total, disableAutoFetch: true, disableStream: true }, PDF_OPTS));
+    return await Promise.race([
       (async () => {
         const doc = await task.promise;
         const page = await doc.getPage(1);
-        await page.getOperatorList();                 // proves the pieces really arrive, not just the first one
+        await page.getOperatorList();                          // proves the pieces really arrive
         return doc;
       })(),
-      new Promise((_, bad) => setTimeout(() => bad(new Error('slow')), 15000)),
+      new Promise((_, bad) => setTimeout(() => bad(new Error('slow')), 10000)),
     ]);
-    return pdf;
   } catch (e) {
-    try { task.destroy(); } catch (x) { /* already gone */ }
-    const data = new Uint8Array(await (await fetch(url + (url.includes('?') ? '&' : '?') + 'plain=1')).arrayBuffer());
-    return pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
+    try { if (task) task.destroy(); } catch (x) { /* already gone */ }
+    return whole();
   }
 }
+
 const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false };
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
