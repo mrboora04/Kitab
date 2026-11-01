@@ -27,6 +27,8 @@ const Browse = {
 
   init() {
     $('#addSource').onclick = () => this.addSource();
+    const gs = $('#globalSearch');
+    if (gs) gs.onsubmit = (e) => { e.preventDefault(); this.globalSearch($('#globalQuery').value.trim()); };
     $('#feedBack').onclick = () => this.back();
     $('#feedSearch').onsubmit = (e) => { e.preventDefault(); this.search($('#feedQuery').value.trim()); };
     $('#sheetClose').onclick = () => this.closeSheet();
@@ -176,7 +178,7 @@ const Browse = {
     return `<button class="li item" data-book="${idx}">
         <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
         <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', ') || e.note || '')}</small>${desc}
-          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
+          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${e._sourceName ? `<em>${esc(e._sourceName)}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
   },
 
   drawEntries(view, entries, append) {
@@ -297,6 +299,69 @@ const Browse = {
       btn.textContent = 'Load more';
       App.toast(e.message, 3500);
     }
+  },
+
+
+  /* ---------------- global search (all catalogs at once) ---------------- */
+  async searchCatalog(src, q, triedLogin) {
+    try {
+      let url;
+      if (src.search) {
+        url = await Opds.searchUrl(src, null, q);
+      } else {
+        const feed = await Opds.load(src.url);
+        url = await Opds.searchUrl(src, feed, q);
+        if (!url) return { src, entries: [], skipped: true };
+      }
+      if (!url) return { src, entries: [], skipped: true };
+      const result = await Opds.load(url);
+      return { src, entries: (result.entries || []).slice(0, 50) };
+    } catch (e) {
+      if (e.needsLogin && !triedLogin) {
+        const login = await App.dialog({ title: 'Log in to ' + (src.name || e.host), message: 'This catalog asks for your account. Kitab keeps the login on this phone and only sends it to ' + e.host + '.', login: true, ok: 'Log in' });
+        if (login && login.user) { Opds.saveLogin(src.url, login.user, login.pass); return this.searchCatalog(src, q, true); }
+      }
+      return { src, entries: [], error: e.message || 'Could not search' };
+    }
+  },
+
+  async globalSearch(q) {
+    if (!q) return;
+    // Only offered from the catalog list; inside a catalog, the feed search box searches that catalog.
+    this.stack = [];
+    this.status('loading');
+    const results = await Promise.allSettled(this.all().map((src) => this.searchCatalog(src, q, false)));
+    const merged = [];
+    const seen = new Map();
+    const failed = [];
+    for (const r of results) {
+      if (r.status !== 'fulfilled') { failed.push('a catalog'); continue; }
+      const { src, entries, error, skipped } = r.value;
+      if (error) { failed.push(src.name || 'a catalog'); continue; }
+      if (skipped) continue;
+      for (const e of entries) {
+        if (!e || e.nav) continue;  // folders would need their own catalog to open; skip them here
+        const entry = Object.assign({}, e, { _sourceName: src.name, _sourceId: src.id });
+        const key = ((entry.title || '').toLowerCase() + '|' + (entry.authors || []).join(', ').toLowerCase());
+        if (seen.has(key)) {
+          const prev = seen.get(key);
+          if (!prev.formats.length && entry.formats.length) { merged[merged.indexOf(prev)] = entry; seen.set(key, entry); }
+          continue;
+        }
+        seen.set(key, entry);
+        merged.push(entry);
+      }
+    }
+    const view = {
+      source: { name: 'All catalogs', id: 'all' },
+      feed: { entries: merged, next: null, search: null },
+      title: `Search all catalogs: \u201c${q}\u201d`,
+      scroll: 0,
+    };
+    this.stack.push(view);
+    this.renderFeed();
+    if (!merged.length) App.toast(failed.length ? 'No results, and some catalogs could not be searched' : 'No results in any catalog', 3500);
+    else if (failed.length) App.toast(`${failed.join(', ')} could not be searched`, 3500);
   },
 
   async search(q) {
