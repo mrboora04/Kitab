@@ -33,7 +33,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
  */
 async function openPdf(url) {
   const whole = async () => {
-    const data = new Uint8Array(await (await fetch(url + (url.includes('?') ? '&' : '?') + 'plain=1')).arrayBuffer());
+    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'plain=1');
+    if (!res.ok) throw new Error('This book file is missing from the phone. Remove it from the library and add it again.');
+    const data = new Uint8Array(await res.arrayBuffer());
     return pdfjsLib.getDocument(Object.assign({ data }, PDF_OPTS)).promise;
   };
   let task = null;
@@ -587,7 +589,9 @@ function unmark(root, id) {
 
 /* ---------- TXT source ---------- */
 async function textSource(url) {
-  const buf = await (await fetch(url)).arrayBuffer();
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('This book file is missing from the phone. Remove it from the library and add it again.');
+  const buf = await res.arrayBuffer();
   let text = new TextDecoder('utf-8').decode(buf);
   if ((text.match(/�/g) || []).length > text.length / 1000) text = new TextDecoder('windows-1252').decode(buf);
   text = text.replace(/\r\n?/g, '\n');
@@ -816,7 +820,7 @@ async function pageWords(pdf, n, key, high) {
 /** What a page that could not be scanned shows: the reason, Try again, and a way to tell us. */
 function scanFailedHtml(n, e) {
   const reason = (e && e.reason) || 'the scanner stopped unexpectedly';
-  const body = `Kitab 1.9.1 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
+  const body = `Kitab 1.9.2 could not scan a page.\n\nReason: ${reason}\nDetail: ${(e && e.detail) || ''}\nPhone: ${navigator.userAgent}\n\n(No book title or text is included.)`;
   const report = 'https://github.com/mrboora04/Kitab/issues/new?title=' + encodeURIComponent('Scan failed: ' + reason) + '&body=' + encodeURIComponent(body);
   return `<div class="scan-fail"><p><b>Couldn't scan page ${n} this time.</b><br>Reason: ${esc(reason)}. Kitab tried 3 times.</p>
     <p><button class="chip" data-retry="${n}">Try again</button> <a class="chip" href="${report}">Report this</a></p></div>`;
@@ -1343,9 +1347,12 @@ class EpubReader {
   get paged() { return this.app.settings.flow === 'paged'; }
 
   async open(loc) {
-    const buf = await (await fetch(this.url)).arrayBuffer();
+    const res = await fetch(this.url);
+    if (!res.ok) throw new Error('This book file is missing from the phone. Remove it from the library and add it again.');
+    const buf = await res.arrayBuffer();
     this.book = ePub(buf);
-    await this.book.ready;
+    // a damaged file must say so, not leave the screen on "Opening…"
+    await Promise.race([this.book.ready, new Promise((_, bad) => setTimeout(() => bad(new Error('This book could not be read. The file may be damaged.')), 30000))]);
     const meta = this.book.packaging.metadata || {};
     this.title = meta.title;
     this.author = meta.creator;
