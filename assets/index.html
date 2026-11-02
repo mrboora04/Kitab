@@ -43,6 +43,17 @@
   </div>
 
   <div id="pane-browse" class="pane hidden">
+    <div id="browseTabs" class="seg tabs2" role="tablist"><button data-bt="sources" class="on">Sources</button><button data-bt="ext">Extensions</button></div>
+    <div id="extView" class="hidden">
+      <header class="lib-head"><div><h1>Extensions</h1><p class="muted">Add sources of free, public books</p></div>
+        <div class="head-actions"><button id="extRefresh" class="icon" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button></div></header>
+      <div id="extNote" class="fineprint hidden"></div>
+      <div id="extList"></div>
+      <h3 class="subhead">Repositories</h3>
+      <div id="repoList"></div>
+      <p><button class="btn" id="addRepo">+ Add repository</button></p>
+      <p class="fineprint">A repository is one link to a list of sources. Sources are small recipes, not apps: they cannot run code, and each one can only contact the websites it lists. Kitab checks every source against the list before installing it. Sources offer free, public or open-access books only.</p>
+    </div>
     <div id="sourceView">
       <header class="lib-head"><div><h1>Browse</h1><p class="muted">Free books from public-domain catalogs</p></div></header>
       <div id="sourceList"></div>
@@ -291,6 +302,8 @@
 <script src="js/readers.js"></script>
 <script src="js/opds.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sources.js"></script>
+<script src="js/extensions.js"></script>
 <script src="js/browse.js"></script>
 </body>
 </html>

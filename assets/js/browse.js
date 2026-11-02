@@ -24,8 +24,11 @@ const Browse = {
   queue: [],
   busyLoads: 0,
   io: null,
+  tab: 'sources',
 
   init() {
+    $$('#browseTabs [data-bt]').forEach((b) => { b.onclick = () => { this.tab = b.dataset.bt; this.renderSources(); }; });
+    ExtUI.init();
     $('#addSource').onclick = () => this.addSource();
     $('#feedBack').onclick = () => this.back();
     $('#feedSearch').onsubmit = (e) => { e.preventDefault(); this.search($('#feedQuery').value.trim()); };
@@ -36,16 +39,23 @@ const Browse = {
 
   /* ---------------- source list ---------------- */
   renderSources() {
-    $('#sourceView').classList.toggle('hidden', this.stack.length > 0);
-    $('#feedView').classList.toggle('hidden', this.stack.length === 0);
-    if (this.stack.length) return;
+    const inFeed = this.stack.length > 0;
+    $('#browseTabs').classList.toggle('hidden', inFeed);
+    $('#sourceView').classList.toggle('hidden', inFeed || this.tab === 'ext');
+    $('#extView').classList.toggle('hidden', inFeed || this.tab !== 'ext');
+    $('#feedView').classList.toggle('hidden', !inFeed);
+    $$('#browseTabs [data-bt]').forEach((b) => b.classList.toggle('on', b.dataset.bt === (this.tab || 'sources')));
+    if (inFeed) return;
+    if (this.tab === 'ext') return ExtUI.render();
     const card = (s, custom) => `
       <button class="source" data-src="${esc(s.id)}">
         <span class="src-icon">${s.icon || '🌐'}</span>
         <span class="src-text"><b>${esc(s.name)}</b><small>${esc(s.blurb || s.url)}</small></span>
         ${custom ? `<span class="src-del" data-del="${esc(s.id)}" aria-label="Remove catalog">✕</span>` : '<span class="chev">›</span>'}
       </button>`;
+    const exts = Sources.list().map((d) => Sources.asCatalog(d));
     $('#sourceList').innerHTML = this.builtin.map((s) => card(s)).join('')
+      + (exts.length ? '<h3 class="subhead">Extensions</h3>' + exts.map((s) => card(s)).join('') : '')
       + (this.custom.length ? '<h3 class="subhead">Your catalogs</h3>' + this.custom.map((s) => card(s, true)).join('') : '');
     $$('#sourceList [data-src]').forEach((b) => {
       b.onclick = (e) => {
@@ -64,7 +74,14 @@ const Browse = {
     });
   },
 
-  all() { return this.builtin.concat(this.custom); },
+  all() { return this.builtin.concat(Sources.list().map((d) => Sources.asCatalog(d)), this.custom); },
+
+  /** One place that reads a feed: built-in and your own catalogs (OPDS), or an installed source (ext: addresses). */
+  async loadFeed(url, src) {
+    if (/^ext:/.test(url)) return Object.assign(await Sources.load(url), { url });
+    if (src && src.ext && !Sources.hostOk(src.def, url)) throw new Error('This source tried to reach a website it did not declare, so Kitab stopped it');
+    return Opds.load(url);
+  },
 
   async addSource() {
     const url = await App.dialog({
@@ -112,7 +129,7 @@ const Browse = {
   async open(src, url, title) {
     this.status('loading');
     try {
-      const feed = await Opds.load(url);
+      const feed = await this.loadFeed(url, src);
       this.stack.push({ source: src, url, feed, title: title || feed.title, scroll: 0 });
       this.renderFeed();
     } catch (e) {
@@ -139,6 +156,8 @@ const Browse = {
     const box = $('#feedStatus');
     this.errorShown = kind === 'error';
     if (kind === 'loading') {
+      $('#browseTabs').classList.add('hidden');
+      $('#extView').classList.add('hidden');
       $('#sourceView').classList.add('hidden');
       $('#feedView').classList.remove('hidden');
       box.innerHTML = '<div class="spinner"></div>';
@@ -155,6 +174,8 @@ const Browse = {
     this.status('done');
     const view = this.stack[this.stack.length - 1];
     if (!view) return this.renderSources();
+    $('#browseTabs').classList.add('hidden');
+    $('#extView').classList.add('hidden');
     $('#sourceView').classList.add('hidden');
     $('#feedView').classList.remove('hidden');
     $('#feedTitle').textContent = view.title || 'Catalog';
@@ -183,6 +204,7 @@ const Browse = {
     const list = $('#feedList');
     if (!append) { list.innerHTML = ''; view.all = []; view.drawn = 0; }
     const start = view.drawn;
+    entries.forEach((e) => { e._src = view.source; });
     view.all = view.all.concat(entries);
     view.drawn += entries.length;
     list.insertAdjacentHTML('beforeend', entries.map((e, i) => this.rowHtml(e, start + i)).join(''));
@@ -246,7 +268,7 @@ const Browse = {
     e._loading = true;
     e._p = (async () => {
       try {
-        const doc = await Opds.load(e.detail);
+        const doc = await this.loadFeed(e.detail, e._src);
         const full = doc.entries.find((x) => x.formats && x.formats.length);
         if (full) {
           Object.assign(e, { formats: full.formats, summary: full.summary || e.summary, cover: e.cover || full.cover });
@@ -289,7 +311,7 @@ const Browse = {
     const btn = $('#feedMore');
     btn.textContent = 'Loading…';
     try {
-      const next = await Opds.load(view.feed.next);
+      const next = await this.loadFeed(view.feed.next, view.source);
       view.feed.next = next.next;
       view.feed.entries = view.feed.entries.concat(next.entries);
       this.drawEntries(view, next.entries, true);
@@ -381,6 +403,7 @@ const Browse = {
   },
 
   download(entry, format) {
+    if (entry._src && entry._src.ext && !Sources.hostOk(entry._src.def, format.url)) { App.toast('This source may only download from the sites it declared', 4000); return; }
     const id = 'd' + Date.now();
     this.downloads[id] = { entry, pct: 0 };
     this.drawSheet();

@@ -42,6 +42,8 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 **1. Find a book.**
 Tap **Browse**, pick a catalog, search anything. Tap a cover, tap Download. It's yours, free.
 
+**Want more places to find books?** Open **Browse → Extensions**. It's a store like Mihon's: tap the download arrow next to a source (Project Gutenberg, the Internet Archive, ...) and it appears under **Sources**. Sources are small, checked recipes, not programs: they can only reach the websites they list, and only offer free, public books. You can add other repositories by their link; see [`store/`](store/README.md) for how to make your own.
+
 **2. Or bring your own.**
 Tap **+ Add** and pick any EPUB, PDF or TXT from your phone.
 

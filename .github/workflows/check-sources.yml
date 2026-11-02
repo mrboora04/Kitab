@@ -1,0 +1,22 @@
+name: Check sources
+on:
+  pull_request:
+    paths: ['store/**']
+  push:
+    branches: [main]
+    paths: ['store/**']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Validate sources and index
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check every source, and that index.json matches them
+        working-directory: store
+        run: node tools/build-index.mjs --check

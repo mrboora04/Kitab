@@ -622,3 +622,20 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .tool.listen > button .ico { width: 20px; height: 20px; }
 .tool.listen > button span { display: flex; }
 #reader.ui .page-info { opacity: 0; transition: opacity .2s; }
+
+/* ---------- Browse tabs and the Extensions store ---------- */
+.tabs2 { margin: 2px 0 14px; max-width: 360px; }
+.ext-row { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border-bottom: .5px solid var(--line); min-width: 0; }
+.ext-row .src-icon { width: 42px; height: 42px; font-size: 22px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.ext-row .row-text b { font-weight: 600; }
+.ext-row .row-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ext-row.repo { padding-left: 0; }
+.ext-row.repo small { white-space: normal; word-break: break-all; font-size: 12px; }
+.ext-row .tags { margin-top: 3px; }
+.ext-row .tags em { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0; }
+.ext-btn { width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--accent); border-radius: 50%; text-decoration: none; }
+.ext-btn:active { background: var(--line); }
+.ext-btn:disabled { opacity: .45; }
+.ext-btn.accent { background: var(--accent); color: var(--accent-fg); }
+.spin .ico, .ext-btn.spin .ico { animation: spin .9s linear infinite; }
+#extRefresh.spin .ico { animation: spin .9s linear infinite; }

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "Kitab Official Sources",
+  "sources": [
+    {
+      "id": "gutendex",
+      "name": "Project Gutenberg (Gutendex)",
+      "lang": "en",
+      "version": 1,
+      "file": "sources/gutendex.json",
+      "sha256": "3312a8a85e7136221a88621e660b062b680d73862a5ab30467aeeb4ca22fbffc",
+      "site": "https://www.gutenberg.org",
+      "icon": "📚",
+      "license": "Public domain"
+    },
+    {
+      "id": "internet-archive",
+      "name": "Internet Archive (public-domain texts)",
+      "lang": "multi",
+      "version": 1,
+      "file": "sources/internet-archive.json",
+      "sha256": "d995fd002c0967daa60335ed23098726bbcf69975c5f5311150a6c2d77921c88",
+      "site": "https://archive.org",
+      "icon": "🏛️",
+      "license": "Public-domain collections"
+    }
+  ]
+}

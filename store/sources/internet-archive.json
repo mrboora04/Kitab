@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "id": "internet-archive",
+  "name": "Internet Archive (public-domain texts)",
+  "version": 1,
+  "lang": "multi",
+  "license": "Public-domain collections",
+  "site": "https://archive.org",
+  "icon": "🏛️",
+  "hosts": ["archive.org"],
+  "type": "json",
+  "search": {
+    "url": "https://archive.org/advancedsearch.php?q=({q})%20AND%20mediatype%3Atexts%20AND%20collection%3A(gutenberg%20OR%20biodiversity%20OR%20americana)&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=25&page={page}&output=json",
+    "list": "response.docs",
+    "pager": { "total": "response.numFound", "per": 25 },
+    "map": {
+      "id": "identifier",
+      "title": "title",
+      "authors": "creator",
+      "cover": { "tpl": "https://archive.org/services/img/{identifier}" }
+    }
+  },
+  "browse": [
+    { "key": "popular", "label": "Most downloaded", "about": "Popular public-domain books and scans", "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20collection%3A(gutenberg%20OR%20biodiversity%20OR%20americana)&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=25&page={page}&output=json" }
+  ],
+  "detail": {
+    "url": "https://archive.org/metadata/{identifier}",
+    "summary": "metadata.description",
+    "formats": {
+      "list": "files",
+      "field": "format",
+      "as": { "EPUB": "EPUB", "Text PDF": "PDF" },
+      "url": { "tpl": "https://archive.org/download/{identifier}/{name}" }
+    }
+  }
+}
