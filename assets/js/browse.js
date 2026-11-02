@@ -197,6 +197,7 @@ const Browse = {
     $('#feedQuery').placeholder = 'Search ' + (view.source.name || 'catalog');
     this.drawEntries(view, view.feed.entries, false);
     $('#feedList').parentElement.scrollTop = view.scroll || 0;
+    if (/op=root/.test(view.url || '') && canSearch && !view.feed.entries.length) setTimeout(() => $('#feedQuery').focus(), 250);
   },
 
   rowHtml(e, idx) {
@@ -224,7 +225,13 @@ const Browse = {
     $('#feedMore').classList.toggle('hidden', !view.feed.next);
     $('#feedMore').textContent = 'Load more';
     $('#feedMore').onclick = () => this.more(view);
-    if (!entries.length && !append) list.innerHTML = '<p class="none">Nothing found here.</p>';
+    if (!entries.length && !append) {
+      const fresh = /op=root/.test(view.url || '');                          // a source with no lists: it opens on its search box
+      const q = (view.title || '').replace(/^[“"]|[”"]$/g, '');
+      list.innerHTML = fresh
+        ? `<div class="search-prompt"><b>Search ${esc(view.source.name)}</b><p>Type a title or an author in the box above.</p></div>`
+        : (view.source.id === 'all' ? '' : `<p class="none">No books found${q ? ` for “${esc(q)}”` : ''}.</p>`);
+    }
   },
 
   bindRows(view, from) {

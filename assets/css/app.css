@@ -651,3 +651,7 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .open-out { color: var(--muted); font-size: 17px; padding: 0 6px; flex: none; }
 #pane-browse #extView, #pane-browse #sitesView { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-bottom: 24px; }
 #pane-browse #sourceView { padding-bottom: 24px; }
+
+.search-prompt { text-align: center; padding: 70px 24px; color: var(--muted); }
+.search-prompt b { display: block; font: 700 22px -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; color: var(--fg); margin-bottom: 6px; letter-spacing: -.3px; }
+.search-prompt p { margin: 0; font-size: 15px; }
