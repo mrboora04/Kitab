@@ -30,6 +30,8 @@ const Browse = {
     $$('#browseTabs [data-bt]').forEach((b) => { b.onclick = () => { this.tab = b.dataset.bt; this.renderSources(); }; });
     ExtUI.init();
     $('#addSource').onclick = () => this.addSource();
+    const gs = $('#globalSearch');
+    if (gs) gs.onsubmit = (e) => { e.preventDefault(); this.globalSearch($('#globalQuery').value.trim()); };
     $('#feedBack').onclick = () => this.back();
     $('#feedSearch').onsubmit = (e) => { e.preventDefault(); this.search($('#feedQuery').value.trim()); };
     $('#sheetClose').onclick = () => this.closeSheet();
@@ -197,7 +199,7 @@ const Browse = {
     return `<button class="li item" data-book="${idx}">
         <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
         <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', ') || e.note || '')}</small>${desc}
-          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
+          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${e._sourceName ? `<em>${esc(e._sourceName)}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
   },
 
   drawEntries(view, entries, append) {
@@ -319,6 +321,75 @@ const Browse = {
       btn.textContent = 'Load more';
       App.toast(e.message, 3500);
     }
+  },
+
+
+  /* ---------------- global search (all catalogs at once) ---------------- */
+  /** One catalog's answer to a search. Never opens a login box (several at once would trip over each other): it reports that a login is needed. */
+  async searchCatalog(src, q) {
+    const work = (async () => {
+      try {
+        let url;
+        if (src.search) {
+          url = await Opds.searchUrl(src, null, q);
+        } else {
+          const feed = await Opds.load(src.url);
+          url = await Opds.searchUrl(src, feed, q);
+        }
+        if (!url) return { src, entries: [], skipped: true };
+        const result = await Opds.load(url);
+        return { src, entries: (result.entries || []).slice(0, 50) };
+      } catch (e) {
+        if (e.needsLogin) return { src, entries: [], login: true };
+        return { src, entries: [], error: e.message || 'Could not search' };
+      }
+    })();
+    // a slow or dead catalog must not hold up the others
+    const limit = new Promise((ok) => setTimeout(() => ok({ src, entries: [], error: 'took too long' }), 15000));
+    return Promise.race([work, limit]);
+  },
+
+  async globalSearch(q) {
+    if (!q) return;
+    // Only offered from the catalog list; inside a catalog, the feed search box searches that catalog.
+    this.stack = [];
+    this.status('loading');
+    const results = await Promise.allSettled(this.all().map((src) => this.searchCatalog(src, q)));
+    const merged = [];
+    const seen = new Map();
+    const failed = [], login = [];
+    for (const r of results) {
+      if (r.status !== 'fulfilled') { failed.push('a catalog'); continue; }
+      const { src, entries, error, skipped, login: needsLogin } = r.value;
+      if (needsLogin) { login.push(src.name || 'a catalog'); continue; }
+      if (error) { failed.push(src.name || 'a catalog'); continue; }
+      if (skipped) continue;
+      for (const e of entries) {
+        if (!e || e.nav) continue;  // folders would need their own catalog to open; skip them here
+        const entry = Object.assign({}, e, { _sourceName: src.name, _sourceId: src.id });
+        const key = ((entry.title || '').toLowerCase() + '|' + (entry.authors || []).join(', ').toLowerCase());
+        if (seen.has(key)) {
+          const prev = seen.get(key);
+          if (!prev.formats.length && entry.formats.length) { merged[merged.indexOf(prev)] = entry; seen.set(key, entry); }
+          continue;
+        }
+        seen.set(key, entry);
+        merged.push(entry);
+      }
+    }
+    const view = {
+      source: { name: 'All catalogs', id: 'all' },
+      feed: { entries: merged, next: null, search: null },
+      title: `Search all catalogs: \u201c${q}\u201d`,
+      scroll: 0,
+    };
+    this.stack.push(view);
+    this.renderFeed();
+    const notes = [];
+    if (login.length) notes.push(`${login.join(', ')} ${login.length > 1 ? 'need' : 'needs'} a login. Open ${login.length > 1 ? 'them' : 'it'} from the list once to log in`);
+    if (failed.length) notes.push(`${failed.join(', ')} could not be searched`);
+    if (!merged.length) App.toast(notes.length ? 'No results. ' + notes.join('. ') : 'No results in any catalog', 4500);
+    else if (notes.length) App.toast(notes.join('. '), 4500);
   },
 
   async search(q) {
