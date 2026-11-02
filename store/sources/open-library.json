@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "open-library",
+  "name": "Open Library (free scans)",
+  "version": 1,
+  "lang": "multi",
+  "license": "Public-domain and open scans",
+  "site": "https://openlibrary.org",
+  "icon": "📖",
+  "hosts": ["openlibrary.org", "archive.org"],
+  "coverHosts": ["covers.openlibrary.org"],
+  "type": "json",
+  "search": {
+    "url": "https://openlibrary.org/search.json?q={q}&has_fulltext=true&public_scan_b=true&fields=key,title,author_name,cover_i,ia&limit=20&page={page}",
+    "list": "docs",
+    "pager": { "total": "numFound", "per": 20 },
+    "map": {
+      "id": "key",
+      "title": "title",
+      "authors": "author_name",
+      "cover": { "tpl": "https://covers.openlibrary.org/b/id/{cover_i}-M.jpg" }
+    }
+  },
+  "detail": {
+    "url": "https://archive.org/metadata/{ia.0}",
+    "summary": "metadata.description",
+    "formats": {
+      "list": "files",
+      "field": "format",
+      "as": { "EPUB": "EPUB", "Text PDF": "PDF" },
+      "url": { "tpl": "https://archive.org/download/{ia.0}/{name}" }
+    }
+  }
+}

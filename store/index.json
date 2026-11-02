@@ -3,17 +3,6 @@
   "name": "Kitab Official Sources",
   "sources": [
     {
-      "id": "gutendex",
-      "name": "Project Gutenberg (Gutendex)",
-      "lang": "en",
-      "version": 1,
-      "file": "sources/gutendex.json",
-      "sha256": "3312a8a85e7136221a88621e660b062b680d73862a5ab30467aeeb4ca22fbffc",
-      "site": "https://www.gutenberg.org",
-      "icon": "📚",
-      "license": "Public domain"
-    },
-    {
       "id": "internet-archive",
       "name": "Internet Archive (public-domain texts)",
       "lang": "multi",
@@ -23,6 +12,28 @@
       "site": "https://archive.org",
       "icon": "🏛️",
       "license": "Public-domain collections"
+    },
+    {
+      "id": "open-library",
+      "name": "Open Library (free scans)",
+      "lang": "multi",
+      "version": 1,
+      "file": "sources/open-library.json",
+      "sha256": "3040c78c64146959009881062d9ab52138716e71c6900c3722138181ad3a5df9",
+      "site": "https://openlibrary.org",
+      "icon": "📖",
+      "license": "Public-domain and open scans"
+    },
+    {
+      "id": "wikisource",
+      "name": "Wikisource",
+      "lang": "en",
+      "version": 1,
+      "file": "sources/wikisource.json",
+      "sha256": "77fcce346b887f8d5ea3d9a1a4b4ffb0924cfe39a1127a57a5b3d2c0eaba77cc",
+      "site": "https://en.wikisource.org",
+      "icon": "📜",
+      "license": "Public domain and freely licensed texts"
     }
   ]
 }

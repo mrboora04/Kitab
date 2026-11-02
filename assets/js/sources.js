@@ -43,11 +43,12 @@ const Sources = {
     if (!Array.isArray(d.hosts) || !d.hosts.length || d.hosts.length > 6 || d.hosts.some((h) => !/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h))) return 'its list of websites is not valid';
     if (!['json', 'html', 'opds'].includes(d.type)) return 'its type is unknown';
     if (JSON.stringify(d).length > 20000) return 'it is too large';
+    if (d.coverHosts && (!Array.isArray(d.coverHosts) || d.coverHosts.length > 4 || d.coverHosts.some((h) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h)))) return 'its list of picture websites is not valid';
     let bad = '';
     const walk = (v) => {
       if (bad) return;
       if (typeof v === 'string') {
-        if (/^https?:\/\//i.test(v) && !this.hostOk(d, v.replace(/\{[^}]*\}/g, 'x'))) bad = 'it points at a website it did not declare: ' + v.slice(0, 60);
+        if (/^https?:\/\//i.test(v) && !this.hostOk(d, v.replace(/\{[^}]*\}/g, 'x')) && !this.coverOk(d, v.replace(/\{[^}]*\}/g, 'x'))) bad = 'it points at a website it did not declare: ' + v.slice(0, 60);
       } else if (v && typeof v === 'object') Object.values(v).forEach(walk);
     };
     walk(d);
@@ -139,7 +140,13 @@ const Sources = {
     if (spec == null) return '';
     if (typeof spec === 'object' && spec.tpl) {
       let missing = false;
-      const s = spec.tpl.replace(/\{([^}]+)\}/g, (m, p) => { const v = this.pick(ctx, p); if (v == null || v === '') missing = true; return Array.isArray(v) ? v.join(', ') : String(v == null ? '' : v); });
+      const s = spec.tpl.replace(/\{([^}]+)\}/g, (m, p) => {
+        const enc = p.endsWith('|enc');                       // {title|enc}: made safe to put in a web address
+        const v = this.pick(ctx, enc ? p.slice(0, -4) : p);
+        if (v == null || v === '') missing = true;
+        const t = Array.isArray(v) ? v.join(', ') : String(v == null ? '' : v);
+        return enc ? encodeURIComponent(t) : t;
+      });
       return missing ? '' : s;
     }
     const v = this.pick(ctx, spec);
@@ -255,7 +262,7 @@ const Sources = {
     const cover = this.val(map.cover, it);
     if (this.coverOk(def, cover)) e.cover = cover;
     e.formats = this.formats(def, (map.formats || []).map((f) => ({ format: f.format, url: this.val(f.url, it) })));
-    if (!e.formats.length && def.detail) {
+    if (!e.formats.length && def.detail && this.val({ tpl: def.detail.url }, it)) {
       const key = def.id + Math.random().toString(36).slice(2, 9);
       this.ctx[key] = { it, id: idv };
       e.detail = `ext:${def.id}?op=detail&c=${key}`;

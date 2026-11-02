@@ -7,7 +7,7 @@ A source is one JSON file in `sources/`, named `<id>.json`. `node tools/build-in
 ```json
 {
   "schema": 1,
-  "id": "gutendex",
+  "id": "example",
   "name": "Project Gutenberg (Gutendex)",
   "version": 1,
   "lang": "en",
@@ -62,7 +62,7 @@ Every address in the file must be `https://` and on one of the `hosts`.
 - `{q}` is the search words (already safe for an address) and `{page}` is the page number, from 1.
 - `list` is where the list of books is in the answer. A path like `a.b.c` follows keys; `[]` means "every item of this list" (`authors[].name`).
 - `next` is where the answer holds the address of the next page. If the site uses page numbers instead, use `"pager": { "total": "response.numFound", "per": 25 }`.
-- A value is a path (`"title"`) or a template (`{ "tpl": "https://x.org/img/{identifier}" }`) where `{path}` is filled from the book's data. If a part is missing the value is left empty.
+- A value is a path (`"title"`) or a template (`{ "tpl": "https://x.org/img/{identifier}" }`) where `{path}` is filled from the book's data. If a part is missing the value is left empty. Write `{title|enc}` to make a value safe to put inside a web address, and `{ia.0}` for the first item of a list.
 - A `browse` list can have its own `map`; otherwise it reads the answer the way `search` does.
 
 ### Two requests per book (`detail`)

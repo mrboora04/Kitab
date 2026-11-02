@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "wikisource",
+  "name": "Wikisource",
+  "version": 1,
+  "lang": "en",
+  "license": "Public domain and freely licensed texts",
+  "site": "https://en.wikisource.org",
+  "icon": "📜",
+  "hosts": ["en.wikisource.org", "ws-export.wmcloud.org"],
+  "type": "json",
+  "search": {
+    "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srsearch={q}&srnamespace=0&srlimit=30&format=json&formatversion=2",
+    "list": "query.search",
+    "map": {
+      "id": "pageid",
+      "title": "title",
+      "summary": "snippet",
+      "formats": [
+        { "format": "EPUB", "url": { "tpl": "https://ws-export.wmcloud.org/?format=epub&lang=en&page={title|enc}" } }
+      ]
+    }
+  }
+}

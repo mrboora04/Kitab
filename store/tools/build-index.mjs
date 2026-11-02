@@ -25,10 +25,12 @@ function validate(d) {
     let u; try { u = new URL(url); } catch { return false; }
     return u.protocol === 'https:' && d.hosts.some((h) => (h.startsWith('*.') ? u.hostname === h.slice(2) || u.hostname.endsWith(h.slice(1)) : u.hostname === h));
   };
+  const coverOk = (url) => { try { const u = new URL(url); return u.protocol === 'https:' && (d.coverHosts || []).includes(u.hostname); } catch { return false; } };
+  if (d.coverHosts && (!Array.isArray(d.coverHosts) || d.coverHosts.length > 4 || d.coverHosts.some((h) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h)))) return 'coverHosts must list up to 4 website names';
   let bad = '';
   const walk = (v) => {
     if (bad) return;
-    if (typeof v === 'string') { if (/^https?:\/\//i.test(v) && !hostOk(v.replace(/\{[^}]*\}/g, 'x'))) bad = `points at a website not in hosts: ${v.slice(0, 70)}`; }
+    if (typeof v === 'string') { const x = v.replace(/\{[^}]*\}/g, 'x'); if (/^https?:\/\//i.test(v) && !hostOk(x) && !coverOk(x)) bad = `points at a website not in hosts or coverHosts: ${v.slice(0, 70)}`; }
     else if (v && typeof v === 'object') Object.values(v).forEach(walk);
   };
   walk(d);

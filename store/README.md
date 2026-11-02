@@ -16,8 +16,11 @@ Then tap the download arrow next to a source. It shows up under **Browse → Sou
 
 | Source | What it reads | Books |
 |---|---|---|
-| Project Gutenberg (Gutendex) | gutendex.com | Public domain classics, EPUB and PDF |
 | Internet Archive (public-domain texts) | archive.org | Public-domain collections, EPUB and PDF |
+| Open Library (free scans) | openlibrary.org, archive.org | Free scans anyone can borrow or download, EPUB and PDF |
+| Wikisource | en.wikisource.org | Free texts, exported as EPUB |
+
+Project Gutenberg and Standard Ebooks are built into Kitab itself, so they are not repeated here.
 
 ## Why it is safe
 
