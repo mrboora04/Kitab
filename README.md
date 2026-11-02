@@ -40,7 +40,7 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 ## How to use Kitab
 
 **1. Find a book.**
-Tap **Browse**, pick a catalog, search anything. Tap a cover, tap Download. It's yours, free.
+Tap **Browse**, pick a catalog, search anything. Or use **Search all catalogs** at the top: it asks every catalog and every source you installed at once, and shows the answers as they come in (catalogs that need a login are skipped). Tap a cover, tap Download. It's yours, free.
 
 **Want more places to find books?** Open **Browse → Extensions**. It's a store like Mihon's: tap the download arrow next to a source (Project Gutenberg, the Internet Archive, ...) and it appears under **Sources**. Sources are small, checked recipes, not programs: they can only reach the websites they list, and only offer free, public books. You can add other repositories by their link; see [`store/`](store/README.md) for how to make your own.
 

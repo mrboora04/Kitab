@@ -206,7 +206,7 @@ const Browse = {
     const list = $('#feedList');
     if (!append) { list.innerHTML = ''; view.all = []; view.drawn = 0; }
     const start = view.drawn;
-    entries.forEach((e) => { e._src = view.source; });
+    entries.forEach((e) => { if (!e._src) e._src = view.source; });
     view.all = view.all.concat(entries);
     view.drawn += entries.length;
     list.insertAdjacentHTML('beforeend', entries.map((e, i) => this.rowHtml(e, start + i)).join(''));
@@ -325,71 +325,87 @@ const Browse = {
 
 
   /* ---------------- global search (all catalogs at once) ---------------- */
-  /** One catalog's answer to a search. Never opens a login box (several at once would trip over each other): it reports that a login is needed. */
+  /**
+   * One catalog's answer to a search. It never opens a login box: a catalog that needs a login is skipped without a word,
+   * because global search is for what you can read right now. A slow or dead catalog gives up after 15 seconds.
+   */
   async searchCatalog(src, q) {
     const work = (async () => {
       try {
         let url;
-        if (src.search) {
-          url = await Opds.searchUrl(src, null, q);
-        } else {
-          const feed = await Opds.load(src.url);
-          url = await Opds.searchUrl(src, feed, q);
-        }
+        if (src.search) url = await Opds.searchUrl(src, null, q);
+        else url = await Opds.searchUrl(src, await this.loadFeed(src.url, src), q);
         if (!url) return { src, entries: [], skipped: true };
-        const result = await Opds.load(url);
+        const result = await this.loadFeed(url, src);
         return { src, entries: (result.entries || []).slice(0, 50) };
       } catch (e) {
-        if (e.needsLogin) return { src, entries: [], login: true };
+        if (e.needsLogin || e.status === 401 || e.status === 403) return { src, entries: [], skipped: true };   // needs a login: not searched
         return { src, entries: [], error: e.message || 'Could not search' };
       }
     })();
-    // a slow or dead catalog must not hold up the others
     const limit = new Promise((ok) => setTimeout(() => ok({ src, entries: [], error: 'took too long' }), 15000));
     return Promise.race([work, limit]);
   },
 
+  /** How well a book matches what was typed: exact title, title starts with it, title has all the words, anywhere. */
+  matchScore(e, q) {
+    const t = (e.title || '').toLowerCase(), words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const hay = t + ' ' + (e.authors || []).join(' ').toLowerCase();
+    if (t === q.toLowerCase()) return 4;
+    if (t.startsWith(q.toLowerCase())) return 3;
+    if (words.length && words.every((w) => t.includes(w))) return 2;
+    if (words.length && words.every((w) => hay.includes(w))) return 1;
+    return 0;
+  },
+
+  /** Search every catalog at once. Results appear as each catalog answers, merged and de-duplicated, best matches first. */
   async globalSearch(q) {
     if (!q) return;
-    // Only offered from the catalog list; inside a catalog, the feed search box searches that catalog.
     this.stack = [];
-    this.status('loading');
-    const results = await Promise.allSettled(this.all().map((src) => this.searchCatalog(src, q)));
-    const merged = [];
+    const sources = this.all();
+    const view = { source: { name: 'All catalogs', id: 'all' }, feed: { entries: [], next: null, search: null }, title: `All catalogs: “${q}”`, scroll: 0 };
+    this.stack.push(view);
+    this.renderFeed();
     const seen = new Map();
-    const failed = [], login = [];
-    for (const r of results) {
-      if (r.status !== 'fulfilled') { failed.push('a catalog'); continue; }
-      const { src, entries, error, skipped, login: needsLogin } = r.value;
-      if (needsLogin) { login.push(src.name || 'a catalog'); continue; }
-      if (error) { failed.push(src.name || 'a catalog'); continue; }
-      if (skipped) continue;
-      for (const e of entries) {
-        if (!e || e.nav) continue;  // folders would need their own catalog to open; skip them here
-        const entry = Object.assign({}, e, { _sourceName: src.name, _sourceId: src.id });
-        const key = ((entry.title || '').toLowerCase() + '|' + (entry.authors || []).join(', ').toLowerCase());
-        if (seen.has(key)) {
-          const prev = seen.get(key);
-          if (!prev.formats.length && entry.formats.length) { merged[merged.indexOf(prev)] = entry; seen.set(key, entry); }
+    let done = 0, got = 0, failed = 0, timer = null;
+    const box = $('#feedStatus');
+    const progress = () => {
+      if (this.stack[this.stack.length - 1] !== view) return;
+      if (done >= sources.length) { this.status('done'); return; }
+      box.innerHTML = `<div class="spinner"></div><p>Searching ${done} of ${sources.length} catalogs…</p>`;
+      box.classList.remove('hidden');
+    };
+    const redraw = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (this.stack[this.stack.length - 1] !== view) return;
+        const keep = $('#feedList').parentElement.scrollTop;
+        view.feed.entries.sort((x, y) => (y._score - x._score) || (x._order - y._order));
+        this.drawEntries(view, view.feed.entries, false);
+        $('#feedList').parentElement.scrollTop = keep;
+        if (done >= sources.length && !view.feed.entries.length) $('#feedList').innerHTML = `<p class="none">Nothing found for “${esc(q)}” in ${sources.length - failed} catalog${sources.length - failed === 1 ? '' : 's'}.</p>`;
+      }, 120);
+    };
+    progress();
+    await Promise.all(sources.map((src) => this.searchCatalog(src, q).then((r) => {
+      done++;
+      if (r.error) failed++;
+      for (const e of r.entries) {
+        if (!e || e.nav || view.feed.entries.length >= 150) continue;      // a folder needs its own catalog to open
+        const entry = Object.assign({}, e, { _sourceName: src.name, _src: src, _score: this.matchScore(e, q), _order: got++ });
+        const key = (entry.title || '').toLowerCase() + '|' + (entry.authors || []).join(', ').toLowerCase();
+        const prev = seen.get(key);
+        if (prev) {                                                          // the same book from another catalog: keep the one that can be downloaded
+          if (!(prev.formats || []).length && (entry.formats || []).length) { view.feed.entries[view.feed.entries.indexOf(prev)] = entry; seen.set(key, entry); }
           continue;
         }
         seen.set(key, entry);
-        merged.push(entry);
+        view.feed.entries.push(entry);
       }
-    }
-    const view = {
-      source: { name: 'All catalogs', id: 'all' },
-      feed: { entries: merged, next: null, search: null },
-      title: `Search all catalogs: \u201c${q}\u201d`,
-      scroll: 0,
-    };
-    this.stack.push(view);
-    this.renderFeed();
-    const notes = [];
-    if (login.length) notes.push(`${login.join(', ')} ${login.length > 1 ? 'need' : 'needs'} a login. Open ${login.length > 1 ? 'them' : 'it'} from the list once to log in`);
-    if (failed.length) notes.push(`${failed.join(', ')} could not be searched`);
-    if (!merged.length) App.toast(notes.length ? 'No results. ' + notes.join('. ') : 'No results in any catalog', 4500);
-    else if (notes.length) App.toast(notes.join('. '), 4500);
+      progress();
+      redraw();
+    })));
+    if (this.stack[this.stack.length - 1] === view && failed && view.feed.entries.length) App.toast(`${failed} catalog${failed === 1 ? '' : 's'} could not be reached`, 3500);
   },
 
   async search(q) {
