@@ -640,7 +640,14 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .spin .ico, .ext-btn.spin .ico { animation: spin .9s linear infinite; }
 #extRefresh.spin .ico { animation: spin .9s linear infinite; }
 
-/* Browse tabs: a fixed-height switch, never stretched by the column layout; each tab scrolls on its own */
-#browseTabs.seg { flex: none; width: 100%; max-width: none; height: 38px; }
-#browseTabs.seg button { height: 100%; padding: 0 8px; }
-#pane-browse #extView { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 24px; -webkit-overflow-scrolling: touch; }
+/* Browse: home, Add sources, Free book websites */
+.backlink { display: inline-flex; align-items: center; gap: 2px; margin: -4px 0 6px -6px; padding: 6px 8px 6px 2px; color: var(--accent); font-size: 17px; font-weight: 500; }
+.backlink .ico { width: 22px; height: 22px; }
+.backlink:active { opacity: .5; }
+.source.plain { cursor: default; }
+.source.plain .btn { flex: none; padding: 7px 14px; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border: 0; font-weight: 600; }
+.ext-row .row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+.ext-row .row-main:active { opacity: .55; }
+.open-out { color: var(--muted); font-size: 17px; padding: 0 6px; flex: none; }
+#pane-browse #extView, #pane-browse #sitesView { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-bottom: 24px; }
+#pane-browse #sourceView { padding-bottom: 24px; }

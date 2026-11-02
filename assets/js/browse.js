@@ -24,10 +24,12 @@ const Browse = {
   queue: [],
   busyLoads: 0,
   io: null,
-  tab: 'sources',
+  tab: 'home',          // home, ext (Add sources) or sites (Free book websites)
 
   init() {
-    $$('#browseTabs [data-bt]').forEach((b) => { b.onclick = () => { this.tab = b.dataset.bt; this.renderSources(); }; });
+    $('#goExt').onclick = () => this.go('ext');
+    $('#goSites').onclick = () => this.go('sites');
+    $$('#pane-browse [data-go]').forEach((b) => { b.onclick = () => this.go(b.dataset.go); });
     ExtUI.init();
     $('#addSource').onclick = () => this.addSource();
     const gs = $('#globalSearch');
@@ -42,15 +44,14 @@ const Browse = {
   /* ---------------- source list ---------------- */
   renderSources() {
     const inFeed = this.stack.length > 0;
-    $('#browseTabs').classList.toggle('hidden', inFeed);
-    $('#sourceView').classList.toggle('hidden', inFeed || this.tab === 'ext' || this.tab === 'sites');
+    $('#sourceView').classList.toggle('hidden', inFeed || this.tab !== 'home');
     $('#extView').classList.toggle('hidden', inFeed || this.tab !== 'ext');
     $('#sitesView').classList.toggle('hidden', inFeed || this.tab !== 'sites');
     $('#feedView').classList.toggle('hidden', !inFeed);
-    $$('#browseTabs [data-bt]').forEach((b) => b.classList.toggle('on', b.dataset.bt === (this.tab || 'sources')));
     if (inFeed) return;
     if (this.tab === 'ext') return ExtUI.render();
     if (this.tab === 'sites') return ExtUI.renderSites();
+    if (typeof App !== 'undefined' && App.tab === 'browse') ExtUI.warm();     // only once Browse is really on screen
     const card = (s, custom) => `
       <button class="source" data-src="${esc(s.id)}">
         <span class="src-icon">${s.icon || '🌐'}</span>
@@ -58,9 +59,9 @@ const Browse = {
         ${custom ? `<span class="src-del" data-del="${esc(s.id)}" aria-label="Remove catalog">✕</span>` : '<span class="chev">›</span>'}
       </button>`;
     const exts = Sources.list().map((d) => Sources.asCatalog(d));
-    $('#sourceList').innerHTML = this.builtin.map((s) => card(s)).join('')
-      + (exts.length ? '<h3 class="subhead">Extensions</h3>' + exts.map((s) => card(s)).join('') : '')
-      + (this.custom.length ? '<h3 class="subhead">Your catalogs</h3>' + this.custom.map((s) => card(s, true)).join('') : '');
+    $('#sourceList').innerHTML = this.builtin.map((s) => card(s)).join('') + exts.map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
+    const n = Object.values(Sources.indexes).reduce((t, ix) => t + ((ix.directory || []).length), 0);
+    if (n) $('#sitesCount').textContent = `${n} sites worth knowing, for every age`;
     $$('#sourceList [data-src]').forEach((b) => {
       b.onclick = (e) => {
         if (e.target.dataset.del) return;
@@ -76,6 +77,13 @@ const Browse = {
         this.renderSources();
       };
     });
+  },
+
+  /** Moves between the Browse home, Add sources and Free book websites. */
+  go(tab) {
+    this.tab = tab;
+    this.renderSources();
+    $('#pane-browse').scrollTop = 0;
   },
 
   all() { return this.builtin.concat(Sources.list().map((d) => Sources.asCatalog(d)), this.custom); },
@@ -160,7 +168,6 @@ const Browse = {
     const box = $('#feedStatus');
     this.errorShown = kind === 'error';
     if (kind === 'loading') {
-      $('#browseTabs').classList.add('hidden');
       $('#extView').classList.add('hidden');
       $('#sitesView').classList.add('hidden');
       $('#sourceView').classList.add('hidden');
@@ -179,7 +186,6 @@ const Browse = {
     this.status('done');
     const view = this.stack[this.stack.length - 1];
     if (!view) return this.renderSources();
-    $('#browseTabs').classList.add('hidden');
     $('#extView').classList.add('hidden');
     $('#sitesView').classList.add('hidden');
     $('#sourceView').classList.add('hidden');
@@ -433,6 +439,7 @@ const Browse = {
       this.stack.length ? this.renderFeed() : this.renderSources();
       return true;
     }
+    if (!this.stack.length && this.tab !== 'home') { this.go('home'); return true; }
     if ($('#feedView').classList.contains('hidden')) return false;
     this.stack.pop();
     this.status('done');

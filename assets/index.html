@@ -43,27 +43,33 @@
   </div>
 
   <div id="pane-browse" class="pane hidden">
-    <div id="browseTabs" class="seg tabs2" role="tablist"><button data-bt="sources" class="on">Sources</button><button data-bt="ext">Extensions</button><button data-bt="sites">Websites</button></div>
-    <div id="sitesView" class="hidden">
-      <header class="lib-head"><div><h1>Free book websites</h1><p class="muted">Places that share books you can read for free</p></div></header>
-      <div id="sitesList"></div>
-      <p class="fineprint">Every site listed offers books that are free and legal to read: public domain, open access, or openly licensed. Tapping a site opens it in your browser. Kitab is not connected to these sites and hosts no books. Sites with a download arrow have a source you can install, so their books appear inside Kitab.</p>
+    <div id="sourceView">
+      <header class="lib-head"><div><h1>Browse</h1><p class="muted">Free books from libraries around the web</p></div></header>
+      <form id="globalSearch" class="search"><input id="globalQuery" type="search" placeholder="Search all free books" autocomplete="off"></form>
+      <h3 class="subhead">Your sources</h3>
+      <div id="sourceList"></div>
+      <h3 class="subhead">Find more</h3>
+      <button class="source" id="goExt"><span class="src-icon">➕</span><span class="src-text"><b>Add sources</b><small>Get more places to look for free books</small></span><span class="chev">›</span></button>
+      <button class="source" id="goSites"><span class="src-icon">🌐</span><span class="src-text"><b>Free book websites</b><small id="sitesCount">Sites worth knowing, for every age</small></span><span class="chev">›</span></button>
+      <p class="fineprint">Kitab doesn’t host or store any books. A source looks books up on a free library for you, and when you tap Download the book comes straight from that library.</p>
     </div>
     <div id="extView" class="hidden">
-      <header class="lib-head"><div><h1>Extensions</h1><p class="muted">Add sources of free, public books</p></div>
-        <div class="head-actions"><button id="extRefresh" class="icon" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button></div></header>
+      <button class="backlink" data-go="home"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Browse</button>
+      <header class="lib-head"><div><h1>Add sources</h1><p class="muted">Sources look up books on free libraries for you</p></div>
+        <div class="head-actions"><button id="extRefresh" class="icon" aria-label="Refresh the list"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button></div></header>
       <div id="extNote" class="fineprint hidden"></div>
       <div id="extList"></div>
-      <h3 class="subhead">Repositories</h3>
+      <h3 class="subhead">Advanced</h3>
+      <div class="source plain"><span class="src-icon">🗄️</span><span class="src-text"><b>Your own library</b><small>A Calibre, Calibre-Web or Kavita library at home, or any OPDS link</small></span><button class="btn" id="addSource">Add</button></div>
+      <div class="source plain"><span class="src-icon">🔗</span><span class="src-text"><b>Source lists</b><small>Where the sources above come from. Most people never need to change this.</small></span><button class="btn" id="addRepo">Add</button></div>
       <div id="repoList"></div>
-      <p><button class="btn" id="addRepo">+ Add repository</button></p>
-      <p class="fineprint">A repository is one link to a list of sources. Sources are small recipes, not apps: they cannot run code, and each one can only contact the websites it lists. Kitab checks every source against the list before installing it. Sources offer free, public or open-access books only.</p>
+      <p class="fineprint">Sources are small recipes, not apps. They can’t run code, they can only talk to the websites they list, and Kitab checks each one before installing it. They only offer free, public or open-access books.</p>
     </div>
-    <div id="sourceView">
-      <header class="lib-head"><div><h1>Browse</h1><p class="muted">Free books from public-domain catalogs</p></div></header>
-      <form id="globalSearch" class="search"><input id="globalQuery" type="search" placeholder="Search all catalogs" autocomplete="off"></form><div id="sourceList"></div>
-      <p class="fineprint">Catalogs listed here offer books that are free to read. You can also add your own Calibre, Calibre-Web or Kavita library by its OPDS address.</p>
-      <p><button class="btn" id="addSource">+ Add catalog</button></p>
+    <div id="sitesView" class="hidden">
+      <button class="backlink" data-go="home"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Browse</button>
+      <header class="lib-head"><div><h1>Free book websites</h1><p class="muted">Tap one to open it in your browser</p></div></header>
+      <div id="sitesList"></div>
+      <p class="fineprint">Every site here shares books that are free and legal to read: public domain, open access, or openly licensed. Kitab isn’t connected to these sites and hosts no books. A site with a download arrow has a source you can add, so its books show up inside Kitab.</p>
     </div>
     <div id="feedView" class="hidden">
       <header class="feed-head">
@@ -116,10 +122,10 @@
     <section class="more-card">
       <h3>Privacy</h3>
       <div class="set-row"><label>Block screenshots of book pages</label><input type="checkbox" class="switch" data-setting="protect"></div>
-      <p class="hint">No ads, no account, no tracking. Kitab only uses the internet when you browse catalogs, and your books and notes never leave your phone.</p>
+      <p class="hint">No ads, no account, no tracking. Kitab doesn’t host or store any books: sources look them up on free libraries, and a book is downloaded straight from there. The internet is used only when you browse or search, and your books and notes never leave your phone.</p>
     </section>
 
-    <p class="fineprint center">Kitab 1.4 · <a href="https://github.com/mrboora04/Kitab">github.com/mrboora04/Kitab</a></p>
+    <p class="fineprint center">Kitab 1.13 · <a href="https://github.com/mrboora04/Kitab">github.com/mrboora04/Kitab</a></p>
   </div>
 
   <nav id="navbar">

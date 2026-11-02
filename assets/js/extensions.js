@@ -1,5 +1,5 @@
 'use strict';
-/* Browse → Extensions: the store. Installed sources, updates, what each repository offers, and the repositories themselves. */
+/* Browse → Add sources (the store) and Free book websites. Installed sources, updates, packs, and the lists they come from. */
 
 const ExtUI = {
   loading: false,
@@ -31,18 +31,20 @@ const ExtUI = {
     this.loading = true;
     this.errors = {};
     $('#extRefresh').classList.add('spin');
-    await Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, force).catch((e) => { this.errors[r.url] = /reach|internet|timed out|took too long/i.test(e.message || '') ? 'Could not load this repository. Check your internet connection, then tap refresh.' : (e.message || 'Could not load this repository'); })));
+    await Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, force).catch((e) => { this.errors[r.url] = /reach|internet|timed out|took too long/i.test(e.message || '') ? 'Could not load the list. Check your internet connection, then tap refresh.' : (e.message || 'Could not load the list'); })));
     this.loading = false;
     $('#extRefresh').classList.remove('spin');
     this.draw();
   },
 
   row(o) {
-    const site = o.site && /^https:\/\//.test(o.site) ? `<a class="ext-btn" href="${esc(o.site)}" aria-label="Open the website">${this.ico.globe}</a>` : '';
-    return `<div class="ext-row" data-id="${esc(o.id)}">
-      <span class="src-icon">${esc(o.icon || '🧩')}</span>
-      <span class="row-text"><b>${esc(o.name)}</b><small>${esc(o.sub)}</small>${o.badge ? `<span class="tags"><em>${esc(o.badge)}</em></span>` : ''}</span>
-      ${site}${o.action}</div>`;
+    const ok = o.site && /^https:\/\//.test(o.site);
+    const body = `<span class="src-icon">${esc(o.icon || '🧩')}</span>
+      <span class="row-text"><b>${esc(o.name)}</b><small>${esc(o.sub)}</small>${o.badge ? `<span class="tags"><em>${esc(o.badge)}</em></span>` : ''}</span>`;
+    // a website row opens the site when tapped anywhere; a source row has a small globe for its website
+    if (o.main && ok) return `<div class="ext-row" data-id="${esc(o.id)}"><a class="row-main" href="${esc(o.site)}">${body}<span class="open-out" aria-hidden="true">↗</span></a>${o.action}</div>`;
+    const globe = ok ? `<a class="ext-btn" href="${esc(o.site)}" aria-label="Open the website">${this.ico.globe}</a>` : '';
+    return `<div class="ext-row" data-id="${esc(o.id)}">${body}${globe}${o.action}</div>`;
   },
 
   draw() {
@@ -61,35 +63,35 @@ const ExtUI = {
       for (const k of (ix && ix.packs) || []) {
         const todo = k.sources.filter((i) => !installed[i] && ix.sources.some((x) => x.id === i));
         if (!todo.length) continue;
-        html.push(`<h3 class="subhead">Packs</h3>` + this.row({ id: 'pack:' + k.id, name: k.name, icon: k.icon, sub: `${ix.name} · ${todo.length} source${todo.length === 1 ? '' : 's'}`, badge: k.about,
+        html.push(`<h3 class="subhead">Starter pack</h3>` + this.row({ id: 'pack:' + k.id, name: k.name, icon: k.icon, sub: k.about || `${todo.length} source${todo.length === 1 ? '' : 's'}`, badge: `${todo.length} source${todo.length === 1 ? '' : 's'}`,
           action: `<button class="ext-btn accent" data-act="pack" data-repo="${esc(r.url)}" data-pack="${esc(k.id)}" aria-label="Install all">${this.ico.down}</button>` }));
       }
     }
     const installedRow = (it) => this.row({
       id: it.d.id, name: it.d.name, icon: it.d.icon, site: it.d.site,
-      sub: `${it.x.repoName || 'Repository'} · ${this.lang(it.d.lang)} · v${it.d.version}`, badge: it.d.license,
+      sub: `${this.lang(it.d.lang)} · version ${it.d.version}`, badge: it.d.license,
       action: it.newer ? `<button class="ext-btn accent" data-act="update" aria-label="Update">${this.ico.up}</button>` : `<button class="ext-btn" data-act="gear" aria-label="Details">${this.ico.gear}</button>`,
     });
-    if (updates.length) html.push(`<h3 class="subhead">Updates pending</h3>${updates.map(installedRow).join('')}`);
-    if (have.length) html.push(`<h3 class="subhead">Installed</h3>${have.map(installedRow).join('')}`);
+    if (updates.length) html.push(`<h3 class="subhead">Updates</h3>${updates.map(installedRow).join('')}`);
+    if (have.length) html.push(`<h3 class="subhead">Added</h3>${have.map(installedRow).join('')}`);
     for (const r of Sources.repos) {
       const ix = Sources.indexes[r.url];
-      if (this.errors[r.url]) { html.push(`<h3 class="subhead">${esc(r.name || 'Repository')}</h3><p class="none">${esc(this.errors[r.url])}</p>`); continue; }
-      if (!ix) { html.push(`<h3 class="subhead">${esc(r.name || 'Repository')}</h3><p class="none">${this.loading ? 'Loading…' : 'Not loaded yet. Tap refresh.'}</p>`); continue; }
+      if (this.errors[r.url]) { html.push(`<h3 class="subhead">Available</h3><p class="none">${esc(this.errors[r.url])}</p>`); continue; }
+      if (!ix) { html.push(`<h3 class="subhead">Available</h3><p class="none">${this.loading ? 'Loading…' : 'Not loaded yet. Tap the refresh button.'}</p>`); continue; }
       const avail = ix.sources.filter((s) => !installed[s.id]);
-      if (!avail.length) { html.push(`<h3 class="subhead">${esc(ix.name)}</h3><p class="none">Everything here is installed.</p>`); continue; }
+      if (!avail.length) { html.push(`<h3 class="subhead">Available</h3><p class="none">You have added everything from “${esc(ix.name)}”.</p>`); continue; }
       const groups = {};
       avail.forEach((s) => { (groups[s.lang || 'multi'] = groups[s.lang || 'multi'] || []).push(s); });
       for (const lang of Object.keys(groups).sort((a, b) => this.lang(a).localeCompare(this.lang(b)))) {
-        html.push(`<h3 class="subhead">${esc(this.lang(lang))} · ${esc(ix.name)}</h3>`);
+        html.push(`<h3 class="subhead">Available · ${esc(this.lang(lang))}${Sources.repos.length > 1 ? ' · ' + esc(ix.name) : ''}</h3>`);
         html.push(groups[lang].sort((a, b) => String(a.name).localeCompare(String(b.name))).map((s) => this.row({
           id: s.id, name: String(s.name || s.id).slice(0, 60), icon: s.icon, site: s.site,
-          sub: `${ix.name} · ${this.lang(s.lang)} · v${s.version}`, badge: String(s.license || '').slice(0, 40),
+          sub: `${this.lang(s.lang)} · version ${s.version}`, badge: String(s.license || '').slice(0, 40),
           action: `<button class="ext-btn" data-act="install" data-repo="${esc(r.url)}" aria-label="Install">${this.ico.down}</button>`,
         })).join(''));
       }
     }
-    $('#extList').innerHTML = html.join('') || '<p class="none">Nothing to show yet.</p>';
+    $('#extList').innerHTML = html.join('') || '<p class="none">Nothing here yet. Connect to the internet and tap the refresh button.</p>';
     $$('#extList .ext-row').forEach((row) => {
       const btn = row.querySelector('[data-act]');
       if (!btn) return;
@@ -103,9 +105,25 @@ const ExtUI = {
   drawRepos() {
     $('#repoList').innerHTML = Sources.repos.map((r, i) => {
       const ix = Sources.indexes[r.url];
-      return `<div class="ext-row repo"><span class="row-text"><b>${esc((ix && ix.name) || r.name || 'Repository')}</b><small>${esc(r.url)}</small></span>${r.url === OFFICIAL_REPO ? '<span class="tags"><em>Official</em></span>' : `<button class="ext-btn" data-rm="${i}" aria-label="Remove repository">✕</button>`}</div>`;
+      const official = r.url === OFFICIAL_REPO;
+      return `<div class="source plain"><span class="src-icon">${official ? '✅' : '📋'}</span><span class="src-text"><b>${esc((ix && ix.name) || r.name || 'Source list')}</b><small>${official ? 'Kitab’s own list' : esc(r.url)}</small></span>${official ? '' : `<button class="ext-btn" data-rm="${i}" aria-label="Remove this list">✕</button>`}</div>`;
     }).join('');
     $$('#repoList [data-rm]').forEach((b) => { b.onclick = () => this.removeRepo(Number(b.dataset.rm)); });
+  },
+
+  /** Quietly loads the lists once per session, so Browse can say how many sites there are and whether a source has an update. */
+  warm() {
+    if (this._warm) return;
+    this._warm = true;
+    Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, false).catch(() => null))).then(() => {
+      let updates = 0;
+      for (const x of Object.values(Sources.installed)) {
+        for (const r of Sources.repos) { const ix = Sources.indexes[r.url]; const e = ix && ix.sources.find((q) => q.id === x.def.id); if (e && Number(e.version) > x.def.version) updates++; }
+      }
+      const small = $('#goExt small');
+      if (small) small.textContent = updates ? `${updates} update${updates === 1 ? '' : 's'} available` : 'Get more places to look for free books';
+      if (Browse.tab === 'home' && !Browse.stack.length) Browse.renderSources();
+    });
   },
 
   async act(what, id, btn) {
@@ -117,12 +135,12 @@ const ExtUI = {
       for (const r of order) { const ix = Sources.indexes[r.url]; const e = ix && ix.sources.find((s) => s.id === id); if (e) return { repo: r, e }; }
       return null;
     })();
-    if (!found) return App.toast('That source is not in any repository right now', 3000);
+    if (!found) return App.toast('That source is not in any list right now', 3000);
     btn.disabled = true;
     btn.classList.add('spin');
     try {
       await Sources.install(found.repo, found.e);
-      App.toast(what === 'update' ? 'Updated' : 'Installed. Find it under Sources');
+      App.toast(what === 'update' ? 'Updated' : 'Added. Find it under Your sources');
     } catch (e) {
       App.toast(e.message || 'Could not install', 5000);
     }
@@ -143,7 +161,7 @@ const ExtUI = {
       if (!e) continue;
       try { await Sources.install(repo, e); done++; } catch (err) { problems.push(`${e.name}: ${err.message}`); }
     }
-    App.toast(problems.length ? `Installed ${done}. ${problems[0]}` : `Installed ${done} source${done === 1 ? '' : 's'}. Find them under Sources`, problems.length ? 6000 : 3500);
+    App.toast(problems.length ? `Added ${done}. ${problems[0]}` : `Added ${done} source${done === 1 ? '' : 's'}. Find them under Your sources`, problems.length ? 6000 : 3500);
     this.draw();
     Browse.renderSources();
   },
@@ -168,7 +186,7 @@ const ExtUI = {
         const has = d.source && ix.sources.some((x) => x.id === d.source);
         const mine = d.source && Sources.installed[d.source];
         const action = has && !mine ? `<button class="ext-btn" data-act="install" data-repo="${esc(r.url)}" aria-label="Install the source">${this.ico.down}</button>` : (mine ? '<span class="tags"><em>Installed</em></span>' : '');
-        html.push(this.row({ id: d.source || d.id, name: d.name, icon: d.icon, site: d.url, sub: d.about, badge: d.license, action }));
+        html.push(this.row({ id: d.source || d.id, name: d.name, icon: d.icon, site: d.url, sub: d.about, badge: d.license, action, main: true }));
       }
     }
     $('#sitesList').innerHTML = html.join('');
@@ -185,7 +203,7 @@ const ExtUI = {
     const ok = await App.dialog({
       title: d.name,
       message: `Version ${d.version} · ${this.lang(d.lang)} · ${d.license}. It can only contact: ${d.hosts.join(', ')}.`,
-      ok: 'Uninstall', danger: true,
+      ok: 'Remove', danger: true,
     });
     if (!ok) return;
     Sources.uninstall(id);
@@ -195,18 +213,18 @@ const ExtUI = {
   },
 
   async addRepo() {
-    const url = await App.dialog({ title: 'Add a repository', message: 'Paste the link to a source list (an index.json).', input: 'https://', ok: 'Continue' });
+    const url = await App.dialog({ title: 'Add a source list', message: 'Paste the link to a list of sources (an index.json).', input: 'https://', ok: 'Continue' });
     if (!url) return;
     const clean = url.trim();
-    if (!/^https:\/\/\S+$/i.test(clean)) return App.toast('A repository link must start with https://', 3500);
-    if (Sources.repos.some((r) => r.url === clean)) return App.toast('That repository is already added', 3000);
+    if (!/^https:\/\/\S+$/i.test(clean)) return App.toast('A list link must start with https://', 3500);
+    if (Sources.repos.some((r) => r.url === clean)) return App.toast('That list is already added', 3000);
     const sure = await App.dialog({
-      title: 'Only add repositories you trust',
-      message: 'A repository decides which sources you can install, and so which books you are shown. Sources cannot run code and can only contact the sites they list, but a bad one could show you books you did not want. Kitab only supports sources of free, public books.',
+      title: 'Only add lists you trust',
+      message: 'A source list decides which sources you can add, and so which books you are shown. Sources cannot run code and can only contact the sites they list, but a bad one could show you books you did not want. Kitab only supports sources of free, public books.',
       ok: 'Add it',
     });
     if (!sure) return;
-    busy(true, 'Checking the repository…');
+    busy(true, 'Checking the list…');
     try {
       const repo = { url: clean, name: '' };
       const ix = await Sources.fetchIndex(repo, true);
@@ -225,7 +243,7 @@ const ExtUI = {
   async removeRepo(i) {
     const r = Sources.repos[i];
     if (!r || r.url === OFFICIAL_REPO) return;
-    if (!(await App.dialog({ title: 'Remove this repository?', message: 'Sources you installed from it stay installed until you uninstall them.', ok: 'Remove', danger: true }))) return;
+    if (!(await App.dialog({ title: 'Remove this list?', message: 'Sources you installed from it stay installed until you uninstall them.', ok: 'Remove', danger: true }))) return;
     Sources.repos.splice(i, 1);
     delete Sources.indexes[r.url];
     Sources.saveRepos();
