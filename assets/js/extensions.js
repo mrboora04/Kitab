@@ -31,7 +31,7 @@ const ExtUI = {
     this.loading = true;
     this.errors = {};
     $('#extRefresh').classList.add('spin');
-    await Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, force).catch((e) => { this.errors[r.url] = e.message || 'Could not load'; })));
+    await Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, force).catch((e) => { this.errors[r.url] = /reach|internet|timed out|took too long/i.test(e.message || '') ? 'Could not load this repository. Check your internet connection, then tap refresh.' : (e.message || 'Could not load this repository'); })));
     this.loading = false;
     $('#extRefresh').classList.remove('spin');
     this.draw();

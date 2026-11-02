@@ -639,3 +639,8 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .ext-btn.accent { background: var(--accent); color: var(--accent-fg); }
 .spin .ico, .ext-btn.spin .ico { animation: spin .9s linear infinite; }
 #extRefresh.spin .ico { animation: spin .9s linear infinite; }
+
+/* Browse tabs: a fixed-height switch, never stretched by the column layout; each tab scrolls on its own */
+#browseTabs.seg { flex: none; width: 100%; max-width: none; height: 38px; }
+#browseTabs.seg button { height: 100%; padding: 0 8px; }
+#pane-browse #extView { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 24px; -webkit-overflow-scrolling: touch; }
