@@ -43,7 +43,12 @@
   </div>
 
   <div id="pane-browse" class="pane hidden">
-    <div id="browseTabs" class="seg tabs2" role="tablist"><button data-bt="sources" class="on">Sources</button><button data-bt="ext">Extensions</button></div>
+    <div id="browseTabs" class="seg tabs2" role="tablist"><button data-bt="sources" class="on">Sources</button><button data-bt="ext">Extensions</button><button data-bt="sites">Websites</button></div>
+    <div id="sitesView" class="hidden">
+      <header class="lib-head"><div><h1>Free book websites</h1><p class="muted">Places that share books you can read for free</p></div></header>
+      <div id="sitesList"></div>
+      <p class="fineprint">Every site listed offers books that are free and legal to read: public domain, open access, or openly licensed. Tapping a site opens it in your browser. Kitab is not connected to these sites and hosts no books. Sites with a download arrow have a source you can install, so their books appear inside Kitab.</p>
+    </div>
     <div id="extView" class="hidden">
       <header class="lib-head"><div><h1>Extensions</h1><p class="muted">Add sources of free, public books</p></div>
         <div class="head-actions"><button id="extRefresh" class="icon" aria-label="Refresh"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5"/></svg></button></div></header>

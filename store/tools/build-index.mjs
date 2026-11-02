@@ -55,7 +55,21 @@ for (const f of files) {
 }
 if (failed) process.exit(1);
 
-const index = JSON.stringify({ schema: 1, name: REPO_NAME, sources }, null, 2) + '\n';
+// A directory of free-book websites and packs of sources (installed together)
+const ids = new Set(sources.map((x) => x.id));
+const readList = (file) => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : []);
+const directory = readList('directory.json'), packs = readList('packs.json');
+for (const d of directory) {
+  const why = !/^[a-z0-9-]{2,40}$/.test(d.id || '') ? 'bad id' : !d.name || d.name.length > 60 ? 'bad name' : !/^https:\/\/[^\s]+$/.test(d.url || '') ? 'url must be https' : !d.category ? 'missing category'
+    : !d.about || d.about.length > 140 ? 'about must be 1-140 characters' : !d.license ? 'missing license note' : (d.source && !ids.has(d.source)) ? `source ${d.source} is not in sources/` : '';
+  if (why) { console.error(`✗ directory.json: ${d.id || d.name}: ${why}`); failed = true; }
+}
+for (const k of packs) {
+  if (!/^[a-z0-9-]{2,40}$/.test(k.id || '') || !k.name || !Array.isArray(k.sources) || !k.sources.length || k.sources.some((i) => !ids.has(i))) { console.error(`✗ packs.json: ${k.id}: every source in a pack must exist in sources/`); failed = true; }
+}
+if (failed) process.exit(1);
+
+const index = JSON.stringify({ schema: 1, name: REPO_NAME, sources, packs, directory }, null, 2) + '\n';
 if (check) {
   if (!existsSync('index.json') || readFileSync('index.json', 'utf8') !== index) {
     console.error('✗ index.json is out of date. Run: node tools/build-index.mjs');

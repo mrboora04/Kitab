@@ -69,7 +69,14 @@ const Sources = {
     try { idx = JSON.parse(r.body); } catch (e) { throw new Error('That address is not a Kitab source list'); }
     if (!idx || idx.schema !== 1 || !Array.isArray(idx.sources)) throw new Error('That address is not a Kitab source list');
     const sources = idx.sources.filter((s) => s && /^[a-z0-9][a-z0-9-]{1,39}$/.test(s.id || '') && typeof s.file === 'string').slice(0, 300);
-    const out = { name: String(idx.name || repo.name || 'Repository').slice(0, 60), sources, base: r.url || repo.url, at: Date.now() };
+    const text = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const directory = (Array.isArray(idx.directory) ? idx.directory : [])
+      .filter((d) => d && typeof d.name === 'string' && /^https:\/\/\S+$/.test(d.url || '') && d.category).slice(0, 200)
+      .map((d) => ({ id: text(d.id || d.name, 40), name: text(d.name, 60), icon: text(d.icon || '🌐', 4), category: text(d.category, 50), url: d.url, about: text(d.about, 140), license: text(d.license, 50), source: /^[a-z0-9-]{2,40}$/.test(d.source || '') ? d.source : '' }));
+    const packs = (Array.isArray(idx.packs) ? idx.packs : [])
+      .filter((k) => k && /^[a-z0-9-]{2,40}$/.test(k.id || '') && typeof k.name === 'string' && Array.isArray(k.sources)).slice(0, 10)
+      .map((k) => ({ id: k.id, name: text(k.name, 60), icon: text(k.icon || '🎁', 4), about: text(k.about, 140), sources: k.sources.filter((i) => /^[a-z0-9-]{2,40}$/.test(i)).slice(0, 12) }));
+    const out = { name: String(idx.name || repo.name || 'Repository').slice(0, 60), sources, directory, packs, base: r.url || repo.url, at: Date.now() };
     this.indexes[repo.url] = out;
     return out;
   },

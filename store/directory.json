@@ -1,0 +1,30 @@
+[
+  { "id": "gutenberg", "name": "Project Gutenberg", "icon": "📚", "category": "Classics and public domain", "url": "https://www.gutenberg.org", "about": "Over 70,000 free classics. Built into Kitab.", "license": "Public domain" },
+  { "id": "standardebooks", "name": "Standard Ebooks", "icon": "✒️", "category": "Classics and public domain", "url": "https://standardebooks.org", "about": "Public-domain classics, carefully formatted. Built into Kitab.", "license": "Public domain" },
+  { "id": "wikisource", "name": "Wikisource", "icon": "📜", "category": "Classics and public domain", "url": "https://wikisource.org", "about": "A free library of texts, in many languages.", "license": "Public domain and free texts", "source": "wikisource" },
+  { "id": "fadedpage", "name": "Faded Page", "icon": "📖", "category": "Classics and public domain", "url": "https://www.fadedpage.com", "about": "Books that are public domain in Canada.", "license": "Public domain (Canada)" },
+  { "id": "gutenberg-au", "name": "Project Gutenberg Australia", "icon": "🦘", "category": "Classics and public domain", "url": "https://gutenberg.net.au", "about": "Books that are public domain in Australia.", "license": "Public domain (Australia)" },
+  { "id": "gutenberg-ca", "name": "Project Gutenberg Canada", "icon": "🍁", "category": "Classics and public domain", "url": "https://gutenberg.ca", "about": "Books that are public domain in Canada.", "license": "Public domain (Canada)" },
+  { "id": "manybooks", "name": "ManyBooks", "icon": "📘", "category": "Classics and public domain", "url": "https://manybooks.net", "about": "Free ebooks: classics and some modern titles shared by their authors.", "license": "Free to read" },
+
+  { "id": "storyweaver", "name": "StoryWeaver", "icon": "🧒", "category": "Kids and families", "url": "https://storyweaver.org.in", "about": "Free picture books and stories for children, in hundreds of languages.", "license": "Open licence" },
+  { "id": "africanstorybook", "name": "African Storybook", "icon": "🌍", "category": "Kids and families", "url": "https://africanstorybook.org", "about": "Free children's stories in many African languages.", "license": "Open licence" },
+  { "id": "bookdash", "name": "Book Dash", "icon": "🐘", "category": "Kids and families", "url": "https://bookdash.org", "about": "Free, beautiful books for young children.", "license": "Open licence" },
+  { "id": "icdl", "name": "International Children's Digital Library", "icon": "🧸", "category": "Kids and families", "url": "https://en.childrenslibrary.org", "about": "Children's books from around the world, free to read.", "license": "Free to read" },
+  { "id": "freekidsbooks", "name": "Free Kids Books", "icon": "🎈", "category": "Kids and families", "url": "https://freekidsbooks.org", "about": "Free children's books to read online or download.", "license": "Free to read" },
+  { "id": "librivox", "name": "LibriVox", "icon": "🎧", "category": "Kids and families", "url": "https://librivox.org", "about": "Free audiobooks of public-domain books, read aloud by volunteers.", "license": "Public domain audio" },
+
+  { "id": "openstax", "name": "OpenStax", "icon": "🎓", "category": "Textbooks and learning", "url": "https://openstax.org", "about": "Free college and school textbooks.", "license": "Open licence" },
+  { "id": "libretexts", "name": "LibreTexts", "icon": "🧪", "category": "Textbooks and learning", "url": "https://libretexts.org", "about": "Free online textbooks across many subjects.", "license": "Open licence" },
+  { "id": "opentextbooks", "name": "Open Textbook Library", "icon": "🏫", "category": "Textbooks and learning", "url": "https://open.umn.edu/opentextbooks", "about": "Peer-reviewed free textbooks.", "license": "Open licence" },
+  { "id": "wikibooks", "name": "Wikibooks", "icon": "🧩", "category": "Textbooks and learning", "url": "https://www.wikibooks.org", "about": "Free textbooks and manuals anyone can read and improve.", "license": "Open licence" },
+
+  { "id": "doab", "name": "Directory of Open Access Books", "icon": "🔬", "category": "Academic and open access", "url": "https://www.doabooks.org", "about": "Free academic books from publishers around the world.", "license": "Open access" },
+  { "id": "oapen", "name": "OAPEN", "icon": "📑", "category": "Academic and open access", "url": "https://www.oapen.org", "about": "Open-access academic books and chapters.", "license": "Open access" },
+
+  { "id": "internet-archive", "name": "Internet Archive", "icon": "🏛️", "category": "Libraries and archives", "url": "https://archive.org/details/texts", "about": "Millions of free texts and scans.", "license": "Public-domain collections", "source": "internet-archive" },
+  { "id": "open-library", "name": "Open Library", "icon": "📖", "category": "Libraries and archives", "url": "https://openlibrary.org", "about": "A catalog of every book, with millions to read free.", "license": "Public-domain and open scans", "source": "open-library" },
+  { "id": "hathitrust", "name": "HathiTrust Digital Library", "icon": "🗄️", "category": "Libraries and archives", "url": "https://www.hathitrust.org", "about": "Millions of digitized books. Public-domain ones are free to read.", "license": "Public domain items" },
+  { "id": "loc", "name": "Library of Congress", "icon": "🇺🇸", "category": "Libraries and archives", "url": "https://www.loc.gov/books/", "about": "Free digitized books and documents.", "license": "Public domain items" },
+  { "id": "bhl", "name": "Biodiversity Heritage Library", "icon": "🌿", "category": "Libraries and archives", "url": "https://www.biodiversitylibrary.org", "about": "Free books and journals about nature and science.", "license": "Open access" }
+]

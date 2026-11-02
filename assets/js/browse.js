@@ -43,12 +43,14 @@ const Browse = {
   renderSources() {
     const inFeed = this.stack.length > 0;
     $('#browseTabs').classList.toggle('hidden', inFeed);
-    $('#sourceView').classList.toggle('hidden', inFeed || this.tab === 'ext');
+    $('#sourceView').classList.toggle('hidden', inFeed || this.tab === 'ext' || this.tab === 'sites');
     $('#extView').classList.toggle('hidden', inFeed || this.tab !== 'ext');
+    $('#sitesView').classList.toggle('hidden', inFeed || this.tab !== 'sites');
     $('#feedView').classList.toggle('hidden', !inFeed);
     $$('#browseTabs [data-bt]').forEach((b) => b.classList.toggle('on', b.dataset.bt === (this.tab || 'sources')));
     if (inFeed) return;
     if (this.tab === 'ext') return ExtUI.render();
+    if (this.tab === 'sites') return ExtUI.renderSites();
     const card = (s, custom) => `
       <button class="source" data-src="${esc(s.id)}">
         <span class="src-icon">${s.icon || '🌐'}</span>
@@ -160,6 +162,7 @@ const Browse = {
     if (kind === 'loading') {
       $('#browseTabs').classList.add('hidden');
       $('#extView').classList.add('hidden');
+      $('#sitesView').classList.add('hidden');
       $('#sourceView').classList.add('hidden');
       $('#feedView').classList.remove('hidden');
       box.innerHTML = '<div class="spinner"></div>';
@@ -178,6 +181,7 @@ const Browse = {
     if (!view) return this.renderSources();
     $('#browseTabs').classList.add('hidden');
     $('#extView').classList.add('hidden');
+    $('#sitesView').classList.add('hidden');
     $('#sourceView').classList.add('hidden');
     $('#feedView').classList.remove('hidden');
     $('#feedTitle').textContent = view.title || 'Catalog';
