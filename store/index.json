@@ -115,6 +115,60 @@
       "license": "Free to read"
     },
     {
+      "id": "runeberg",
+      "name": "Project Runeberg",
+      "icon": "🇸🇪",
+      "category": "Classics and public domain",
+      "url": "https://runeberg.org",
+      "about": "Free Nordic literature, in many languages.",
+      "license": "Public domain"
+    },
+    {
+      "id": "loyalbooks",
+      "name": "Loyal Books",
+      "icon": "🎧",
+      "category": "Classics and public domain",
+      "url": "https://www.loyalbooks.com",
+      "about": "Free public-domain audiobooks and ebooks.",
+      "license": "Public domain"
+    },
+    {
+      "id": "literature-network",
+      "name": "The Literature Network",
+      "icon": "🖋️",
+      "category": "Classics and public domain",
+      "url": "https://www.online-literature.com",
+      "about": "Classic books, stories and poems to read online.",
+      "license": "Public domain"
+    },
+    {
+      "id": "sherlock",
+      "name": "The Complete Sherlock Holmes",
+      "icon": "🔍",
+      "category": "Classics and public domain",
+      "url": "https://sherlock-holm.es",
+      "about": "All the Sherlock Holmes stories.",
+      "license": "Public domain"
+    },
+    {
+      "id": "pdr",
+      "name": "The Public Domain Review",
+      "icon": "🎨",
+      "category": "Classics and public domain",
+      "url": "https://publicdomainreview.org",
+      "about": "Essays and treasures from the public domain.",
+      "license": "Public domain"
+    },
+    {
+      "id": "pgdp",
+      "name": "Distributed Proofreaders",
+      "icon": "🤝",
+      "category": "Classics and public domain",
+      "url": "https://www.pgdp.net",
+      "about": "Volunteers turning old books into free ebooks. You can help.",
+      "license": "Public domain"
+    },
+    {
       "id": "storyweaver",
       "name": "StoryWeaver",
       "icon": "🧒",
@@ -169,6 +223,33 @@
       "license": "Public domain audio"
     },
     {
+      "id": "grimm",
+      "name": "Grimm Stories",
+      "icon": "🏰",
+      "category": "Kids and families",
+      "url": "https://www.grimmstories.com",
+      "about": "The fairy tales of the Brothers Grimm.",
+      "license": "Public domain"
+    },
+    {
+      "id": "andersen",
+      "name": "Andersen Stories",
+      "icon": "🧜",
+      "category": "Kids and families",
+      "url": "https://www.andersenstories.com",
+      "about": "The fairy tales of Hans Christian Andersen.",
+      "license": "Public domain"
+    },
+    {
+      "id": "ck12",
+      "name": "CK-12",
+      "icon": "📐",
+      "category": "Kids and families",
+      "url": "https://www.ck12.org",
+      "about": "Free school textbooks and lessons for children.",
+      "license": "Open licence"
+    },
+    {
       "id": "openstax",
       "name": "OpenStax",
       "icon": "🎓",
@@ -205,6 +286,51 @@
       "license": "Open licence"
     },
     {
+      "id": "bccampus",
+      "name": "BCcampus Open Education",
+      "icon": "🎓",
+      "category": "Textbooks and learning",
+      "url": "https://open.bccampus.ca",
+      "about": "Free open textbooks.",
+      "license": "Open licence"
+    },
+    {
+      "id": "core-econ",
+      "name": "CORE Econ",
+      "icon": "📈",
+      "category": "Textbooks and learning",
+      "url": "https://www.core-econ.org",
+      "about": "A free economics textbook.",
+      "license": "Open licence"
+    },
+    {
+      "id": "clp",
+      "name": "CLP Calculus",
+      "icon": "➗",
+      "category": "Textbooks and learning",
+      "url": "https://personal.math.ubc.ca/~CLP/",
+      "about": "Free calculus textbooks.",
+      "license": "Open licence"
+    },
+    {
+      "id": "lardbucket",
+      "name": "2012 Book Archive",
+      "icon": "📕",
+      "category": "Textbooks and learning",
+      "url": "https://2012books.lardbucket.org",
+      "about": "Free textbooks under Creative Commons.",
+      "license": "Open licence"
+    },
+    {
+      "id": "wikiversity",
+      "name": "Wikiversity",
+      "icon": "🧠",
+      "category": "Textbooks and learning",
+      "url": "https://www.wikiversity.org",
+      "about": "Free learning materials and courses.",
+      "license": "Open licence"
+    },
+    {
       "id": "doab",
       "name": "Directory of Open Access Books",
       "icon": "🔬",
@@ -220,6 +346,42 @@
       "category": "Academic and open access",
       "url": "https://www.oapen.org",
       "about": "Open-access academic books and chapters.",
+      "license": "Open access"
+    },
+    {
+      "id": "openedition",
+      "name": "OpenEdition",
+      "icon": "🇫🇷",
+      "category": "Academic and open access",
+      "url": "https://www.openedition.org",
+      "about": "Open-access books and journals.",
+      "license": "Open access"
+    },
+    {
+      "id": "uclpress",
+      "name": "UCL Press",
+      "icon": "🏛️",
+      "category": "Academic and open access",
+      "url": "https://www.uclpress.co.uk",
+      "about": "Open-access academic books from UCL.",
+      "license": "Open access"
+    },
+    {
+      "id": "oll",
+      "name": "Online Library of Liberty",
+      "icon": "⚖️",
+      "category": "Academic and open access",
+      "url": "https://oll.libertyfund.org",
+      "about": "Free books on history, law and ideas.",
+      "license": "Free to read"
+    },
+    {
+      "id": "opendoar",
+      "name": "OpenDOAR",
+      "icon": "🗂️",
+      "category": "Academic and open access",
+      "url": "https://v2.sherpa.ac.uk/opendoar/",
+      "about": "A directory of open repositories of academic work.",
       "license": "Open access"
     },
     {
@@ -268,6 +430,33 @@
       "url": "https://www.biodiversitylibrary.org",
       "about": "Free books and journals about nature and science.",
       "license": "Open access"
+    },
+    {
+      "id": "dpla",
+      "name": "Digital Public Library of America",
+      "icon": "🇺🇸",
+      "category": "Libraries and archives",
+      "url": "https://dp.la",
+      "about": "Free books and collections from libraries across the USA.",
+      "license": "Free to read"
+    },
+    {
+      "id": "onlinebooks",
+      "name": "The Online Books Page",
+      "icon": "🔗",
+      "category": "Libraries and archives",
+      "url": "https://onlinebooks.library.upenn.edu",
+      "about": "An index of over a million free books online, from the University of Pennsylvania.",
+      "license": "Free to read"
+    },
+    {
+      "id": "ebooksdirectory",
+      "name": "E-Books Directory",
+      "icon": "📚",
+      "category": "Libraries and archives",
+      "url": "https://www.e-booksdirectory.com",
+      "about": "A directory of free ebooks, textbooks and lecture notes.",
+      "license": "Free to read"
     }
   ]
 }
