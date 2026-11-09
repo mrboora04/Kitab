@@ -120,7 +120,7 @@ const Opds = (() => {
     let summary = describe(e);
     const entry = {
       id: text(e, 'id'), title, authors, summary, note: '',
-      cover: thumb ? thumb.href : '',
+      cover: thumb ? thumb.href.replace(/^http:/i, 'https:') : '',   // a plain http picture is blocked inside the app
       formats: rankFormats(formats),
     };
     // Some feeds (Project Gutenberg) put only the author, or a download count, in a book's short description
