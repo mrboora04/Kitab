@@ -16,7 +16,7 @@ Then tap the download arrow next to a source. It shows up under **Browse → Sou
 
 | Source | What it reads | Books |
 |---|---|---|
-| Internet Archive (public-domain texts) | archive.org | Public-domain collections, EPUB and PDF |
+| Free Scanned Books | archive.org | Scanned books that are free to read on the Internet Archive (no lending-library items), with a list per language |
 | Open Library (free scans) | openlibrary.org, archive.org | Free scans anyone can borrow or download, EPUB and PDF |
 | Wikisource | en.wikisource.org | Free texts, exported as EPUB |
 

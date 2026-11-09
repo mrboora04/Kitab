@@ -655,3 +655,22 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .search-prompt { text-align: center; padding: 70px 24px; color: var(--muted); }
 .search-prompt b { display: block; font: 700 22px -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; color: var(--fg); margin-bottom: 6px; letter-spacing: -.3px; }
 .search-prompt p { margin: 0; font-size: 15px; }
+
+/* ---------- Browse lists: sections are rows, books are covers ---------- */
+#feedList { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 14px; align-items: start; padding-top: 6px; }
+#feedList > .li.nav, #feedList > p, #feedList > .search-prompt { grid-column: 1 / -1; }
+#feedList > .li.nav { margin: -11px 0; padding: 12px 2px; }
+.sec-dot { width: 38px; height: 38px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 700 17px Georgia, serif; color: hsl(var(--h) 45% 32%); background: hsl(var(--h) 55% 88%); }
+body[data-theme="dusk"] .sec-dot, body[data-theme="night"] .sec-dot { color: hsl(var(--h) 60% 80%); background: hsl(var(--h) 30% 22%); }
+.li.gbook { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 0; border: 0; min-width: 0; text-align: left; transition: transform .2s var(--ease), opacity .2s; }
+.li.gbook:active { transform: scale(.96); opacity: .85; }
+.li.gbook .cover { margin-bottom: 5px; }
+.li.gbook .cover img { position: absolute; inset: 0; z-index: 1; background: #fff; }
+.li.gbook b { font-size: 12.5px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.li.gbook small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li.gbook .tags { margin: 1px 0 0; }
+.li.gbook .tags em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--accent); }
+.li.gbook .tags em.have { color: #3c7a48; }
+.langbar { padding: 0 0 12px; }
+.langbar .chip { padding: 6px 13px; font-size: 13.5px; }
+#feedList .li.gbook, body:not(.funky) #feedList .li.gbook { border: 0; }

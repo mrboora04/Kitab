@@ -114,6 +114,16 @@ Selectors are CSS. `selector@attribute` reads an attribute (`a.next@href`); with
 
 `search` is optional: Kitab uses the one the catalog advertises.
 
+## Language filter (optional)
+
+A source that can ask its site for one language declares how:
+
+```json
+"langFilter": { "param": "%20AND%20language%3A({v})", "values": { "hi": "hin%20OR%20Hindi", "pa": "pan%20OR%20Punjabi" } }
+```
+
+Put `{lang}` in the search address. When the reader picks a language in Kitab's search, `{lang}` becomes `param` with `{v}` replaced by that language's value; for All it is empty. A source without `langFilter` is only searched for its own `lang`.
+
 ## Limits
 
 Files over 20 KB are refused. At most 60 books are read per page. Only `EPUB` and `PDF` downloads are used.

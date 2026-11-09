@@ -215,12 +215,15 @@ const Sources = {
     if (op === 'search') {
       const s = def.search;
       if (!s) throw new Error('This source cannot be searched');
-      return { url: this.fill(s.url, { q: encodeURIComponent(p.get('q') || ''), page }), m: s, op, page, q: p.get('q') || '' };
+      // {lang} in the address becomes the source's own way of asking for one language, or nothing for all
+      const code = p.get('lang') || '', lf = def.langFilter;
+      const lang = lf && lf.values && lf.values[code] ? String(lf.param || '{v}').replace('{v}', lf.values[code]) : '';
+      return { url: this.fill(s.url, { q: encodeURIComponent(p.get('q') || ''), page, lang }), m: s, op, page, q: p.get('q') || '', lang: code };
     }
     if (op === 'browse') {
       const b = (def.browse || []).find((x) => x.key === p.get('k'));
       if (!b) throw new Error('That list does not exist');
-      return { url: this.fill(b.url, { page }), m: b.map ? b : Object.assign({}, def.search || {}, b), op, page, k: b.key };
+      return { url: this.fill(b.url, { page, lang: '' }), m: b.map ? b : Object.assign({}, def.search || {}, b), op, page, k: b.key };
     }
     if (op === 'page') {
       const u = p.get('u');
@@ -233,7 +236,7 @@ const Sources = {
   nextAddress(def, req, count, extra) {
     if (extra && /^https:/.test(extra)) return `ext:${def.id}?op=page&u=${encodeURIComponent(extra)}${req.k ? '&k=' + encodeURIComponent(req.k) : ''}`;
     if (!count) return null;
-    if (req.op === 'search') return `ext:${def.id}?op=search&q=${encodeURIComponent(req.q)}&page=${req.page + 1}`;
+    if (req.op === 'search') return `ext:${def.id}?op=search&q=${encodeURIComponent(req.q)}&page=${req.page + 1}${req.lang ? '&lang=' + req.lang : ''}`;
     if (req.op === 'browse') return `ext:${def.id}?op=browse&k=${encodeURIComponent(req.k)}&page=${req.page + 1}`;
     return null;
   },
@@ -293,7 +296,10 @@ const Sources = {
         const url = this.val(pick.url, Object.assign({}, c.it, f));
         out.formats.push({ format: kind, url, size: Number(f.size) || 0, score: kind === 'EPUB' ? 2 : 1 });
       }
-      out.formats = this.formats(def, out.formats).sort((a, b) => (b.score - a.score) || (b.size - a.size)).slice(0, 3);
+      // EPUB first; of several PDFs keep the smallest (the text one, not the heavy picture-only one)
+      const kinds = new Set();
+      out.formats = this.formats(def, out.formats).sort((a, b) => (b.score - a.score) || ((a.size || 9e12) - (b.size || 9e12)))
+        .filter((f) => !kinds.has(f.format) && kinds.add(f.format));
     }
     return { title: def.name, entries: [{ id: '', title: '', authors: [], summary: out.summary, formats: out.formats, cover: '' }], next: null };
   },

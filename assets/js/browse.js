@@ -4,12 +4,12 @@
 const Browse = {
   builtin: [
     {
-      id: 'gutenberg', name: 'Project Gutenberg', blurb: 'Over 70,000 free classics, public domain', icon: '📚',
+      id: 'gutenberg', lang: 'en', name: 'Project Gutenberg', blurb: 'Over 70,000 free classics, public domain', icon: '📚',
       url: 'https://www.gutenberg.org/ebooks.opds/',
       search: 'https://www.gutenberg.org/ebooks/search.opds/?query={searchTerms}',
     },
     {
-      id: 'standardebooks', name: 'Standard Ebooks', blurb: 'Carefully formatted free editions of classics', icon: '✒️',
+      id: 'standardebooks', lang: 'en', name: 'Standard Ebooks', blurb: 'Carefully formatted free editions of classics', icon: '✒️',
       url: 'https://standardebooks.org/feeds/opds',
       search: 'https://standardebooks.org/feeds/opds/all?query={searchTerms}',
       // Their full catalog feed may be for Patrons Circle members only; New releases is the free part.
@@ -24,6 +24,8 @@ const Browse = {
   queue: [],
   busyLoads: 0,
   io: null,
+  lang: store.get('er.lang', ''),      // global search language ('' = all)
+  LANGS: [['', 'All'], ['en', 'English'], ['hi', 'Hindi'], ['pa', 'Punjabi'], ['ur', 'Urdu'], ['bn', 'Bengali'], ['mr', 'Marathi'], ['gu', 'Gujarati'], ['ta', 'Tamil'], ['te', 'Telugu'], ['kn', 'Kannada'], ['ml', 'Malayalam'], ['sa', 'Sanskrit']],
   tab: 'home',          // home, ext (Add sources) or sites (Free book websites)
 
   init() {
@@ -31,6 +33,7 @@ const Browse = {
     $('#goSites').onclick = () => this.go('sites');
     $$('#pane-browse [data-go]').forEach((b) => { b.onclick = () => this.go(b.dataset.go); });
     ExtUI.init();
+    this.drawLangs();
     $('#addSource').onclick = () => this.addSource();
     const gs = $('#globalSearch');
     if (gs) gs.onsubmit = (e) => { e.preventDefault(); this.globalSearch($('#globalQuery').value.trim()); };
@@ -77,6 +80,30 @@ const Browse = {
         this.renderSources();
       };
     });
+  },
+
+  /** The language chips under the search boxes. Choosing one re-runs a global search that is on screen. */
+  drawLangs() {
+    const html = this.LANGS.map(([c, n]) => `<button class="chip${c === this.lang ? ' on' : ''}" data-lang="${c}">${n}</button>`).join('');
+    $$('.langbar').forEach((bar) => {
+      bar.innerHTML = html;
+      bar.querySelectorAll('[data-lang]').forEach((b) => {
+        b.onclick = () => {
+          this.lang = b.dataset.lang;
+          store.set('er.lang', this.lang);
+          this.drawLangs();
+          const view = this.stack[this.stack.length - 1];
+          if (view && view.source.id === 'all' && view.q) this.globalSearch(view.q);
+        };
+      });
+    });
+  },
+
+  /** Whether a catalog can answer in the chosen language: it filters by language itself, or it is in that language. */
+  speaks(src, lang) {
+    if (!lang) return true;
+    if (src.ext) return !!((src.def.langFilter && src.def.langFilter.values && src.def.langFilter.values[lang]) || src.def.lang === lang);
+    return src.lang === lang;
   },
 
   /** Moves between the Browse home, Add sources and Free book websites. */
@@ -195,22 +222,28 @@ const Browse = {
     $('#feedSearch').classList.toggle('hidden', !canSearch);
     $('#feedQuery').value = '';
     $('#feedQuery').placeholder = 'Search ' + (view.source.name || 'catalog');
+    $('#feedLangs').classList.toggle('hidden', view.source.id !== 'all');
     this.drawEntries(view, view.feed.entries, false);
     $('#feedList').parentElement.scrollTop = view.scroll || 0;
     if (/op=root/.test(view.url || '') && canSearch && !view.feed.entries.length) setTimeout(() => $('#feedQuery').focus(), 250);
   },
 
+  /** A steady colour for a book without a cover picture, from its title. */
+  tint(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; },
+
   rowHtml(e, idx) {
-    if (e.nav) {
-      return `<button class="li nav" data-nav="${idx}"><span class="folder">📁</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
+    if (e.nav) {      // a section of the catalog: a plain row, not a folder
+      return `<button class="li nav" data-nav="${idx}"><span class="sec-dot" style="--h:${this.tint(e.title)}">${esc((e.title || '?').trim().slice(0, 1).toUpperCase())}</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
     }
+    // a book: its cover (or a printed-looking one made from the title), then title, author and one small label
     const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
-    const have = this.have(e);
-    const desc = e.summary ? `<span class="desc">${esc(e.summary.slice(0, 260))}</span>` : (e.detail && !e._tried ? '<span class="desc ghost"></span>' : '');
-    return `<button class="li item" data-book="${idx}">
-        <span class="thumb">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
-        <span class="row-text"><b>${esc(e.title)}</b><small>${esc((e.authors || []).join(', ') || e.note || '')}</small>${desc}
-          <span class="tags">${fmt ? `<em>${fmt}</em>` : ''}${e._sourceName ? `<em>${esc(e._sourceName)}</em>` : ''}${have ? '<em class="have">In library</em>' : ''}${e.authors && e.authors.length && e.note ? `<em class="note">${esc(e.note)}</em>` : ''}</span></span></button>`;
+    const tag = this.have(e) ? '<em class="have">In library</em>' : (e._sourceName ? `<em>${esc(e._sourceName)}</em>` : (fmt ? `<em>${fmt}</em>` : ''));
+    const by = (e.authors || []).join(', ') || e.note || '';
+    return `<button class="li gbook" data-book="${idx}">
+        <span class="cover" style="--c1:hsl(${this.tint(e.title)} 38% 42%);--c2:hsl(${this.tint(e.title)} 45% 24%)">
+          <span class="gen"><span class="type">${esc(fmt || 'BOOK')}</span><span>${esc(e.title.slice(0, 60))}</span><span></span></span>
+          ${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}</span>
+        <b>${esc(e.title)}</b>${by ? `<small>${esc(by)}</small>` : ''}<span class="tags">${tag}</span></button>`;
   },
 
   drawEntries(view, entries, append) {
@@ -353,6 +386,7 @@ const Browse = {
         if (src.search) url = await Opds.searchUrl(src, null, q);
         else url = await Opds.searchUrl(src, await this.loadFeed(src.url, src), q);
         if (!url) return { src, entries: [], skipped: true };
+        if (this.lang && /^ext:/.test(url)) url += '&lang=' + encodeURIComponent(this.lang);
         const result = await this.loadFeed(url, src);
         return { src, entries: (result.entries || []).slice(0, 50) };
       } catch (e) {
@@ -379,8 +413,9 @@ const Browse = {
   async globalSearch(q) {
     if (!q) return;
     this.stack = [];
-    const sources = this.all();
-    const view = { source: { name: 'All catalogs', id: 'all' }, feed: { entries: [], next: null, search: null }, title: `All catalogs: “${q}”`, scroll: 0 };
+    const sources = this.all().filter((src) => this.speaks(src, this.lang));
+    const langName = (this.LANGS.find((l) => l[0] === this.lang) || [])[1];
+    const view = { source: { name: 'All catalogs', id: 'all' }, feed: { entries: [], next: null, search: null }, title: `“${q}”`, q, scroll: 0 };
     this.stack.push(view);
     this.renderFeed();
     const seen = new Map();
@@ -389,7 +424,7 @@ const Browse = {
     const progress = () => {
       if (this.stack[this.stack.length - 1] !== view) return;
       if (done >= sources.length) { this.status('done'); return; }
-      box.innerHTML = `<div class="spinner"></div><p>Searching ${done} of ${sources.length} catalogs…</p>`;
+      box.innerHTML = `<div class="spinner"></div><p>Searching ${done} of ${sources.length} sources${this.lang ? ' in ' + langName : ''}…</p>`;
       box.classList.remove('hidden');
     };
     const redraw = () => {
@@ -400,9 +435,10 @@ const Browse = {
         view.feed.entries.sort((x, y) => (y._score - x._score) || (x._order - y._order));
         this.drawEntries(view, view.feed.entries, false);
         $('#feedList').parentElement.scrollTop = keep;
-        if (done >= sources.length && !view.feed.entries.length) $('#feedList').innerHTML = `<p class="none">Nothing found for “${esc(q)}” in ${sources.length - failed} catalog${sources.length - failed === 1 ? '' : 's'}.</p>`;
+        if (done >= sources.length && !view.feed.entries.length) $('#feedList').innerHTML = `<p class="none">No books found for “${esc(q)}”${this.lang ? ' in ' + langName + '. Try All, or add the Free Scanned Books source' : ''}.</p>`;
       }, 120);
     };
+    if (!sources.length) { this.status('done'); $('#feedList').innerHTML = `<p class="none">None of your sources has ${esc(langName)} books yet. Add “Free Scanned Books” under Add sources.</p>`; return; }
     progress();
     await Promise.all(sources.map((src) => this.searchCatalog(src, q).then((r) => {
       done++;

@@ -4,14 +4,14 @@
   "sources": [
     {
       "id": "internet-archive",
-      "name": "Internet Archive (public-domain texts)",
+      "name": "Free Scanned Books",
       "lang": "multi",
-      "version": 1,
+      "version": 2,
       "file": "sources/internet-archive.json",
-      "sha256": "d995fd002c0967daa60335ed23098726bbcf69975c5f5311150a6c2d77921c88",
-      "site": "https://archive.org",
+      "sha256": "24cec0d226ba679bbe4432b69f2730f40ffda98fdfca75fbf2aa3e64f95b2516",
+      "site": "https://archive.org/details/texts",
       "icon": "🏛️",
-      "license": "Public-domain collections"
+      "license": "Free to read scans (Internet Archive)"
     },
     {
       "id": "open-library",
@@ -41,7 +41,7 @@
       "id": "free-books",
       "name": "Free Books Pack",
       "icon": "🎁",
-      "about": "The Internet Archive, Open Library and Wikisource in one tap.",
+      "about": "Free Scanned Books, Open Library and Wikisource in one tap.",
       "sources": [
         "internet-archive",
         "open-library",
