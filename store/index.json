@@ -51,6 +51,105 @@
   ],
   "directory": [
     {
+      "id": "ndli",
+      "name": "National Digital Library of India",
+      "icon": "🇮🇳",
+      "category": "Indian books and languages",
+      "url": "https://ndl.iitkgp.ac.in",
+      "about": "India's government library: crores of books and study material, many languages. Free sign-up.",
+      "license": "Free to read"
+    },
+    {
+      "id": "dli-archive",
+      "name": "Digital Library of India (on Internet Archive)",
+      "icon": "🏛️",
+      "category": "Indian books and languages",
+      "url": "https://archive.org/details/digitallibraryindia",
+      "about": "Hundreds of thousands of old Indian books scanned by the government, in dozens of languages.",
+      "license": "Public-domain scans"
+    },
+    {
+      "id": "epathshala",
+      "name": "ePathshala (NCERT)",
+      "icon": "🎒",
+      "category": "Indian books and languages",
+      "url": "https://epathshala.nic.in",
+      "about": "All NCERT school textbooks, classes 1 to 12, in Hindi, English and Urdu.",
+      "license": "Free from NCERT"
+    },
+    {
+      "id": "ncert",
+      "name": "NCERT Textbooks",
+      "icon": "📗",
+      "category": "Indian books and languages",
+      "url": "https://ncert.nic.in/textbook.php",
+      "about": "Official NCERT textbook PDFs for every class and subject.",
+      "license": "Free from NCERT"
+    },
+    {
+      "id": "hi-wikisource",
+      "name": "Hindi Wikisource",
+      "icon": "📜",
+      "category": "Indian books and languages",
+      "url": "https://hi.wikisource.org",
+      "about": "Free Hindi texts: Premchand, Kabir, classics and more.",
+      "license": "Public domain and free texts"
+    },
+    {
+      "id": "rekhta",
+      "name": "Rekhta eBooks",
+      "icon": "🖋️",
+      "category": "Indian books and languages",
+      "url": "https://www.rekhta.org/ebooks",
+      "about": "A huge library of Urdu and Hindi books to read online.",
+      "license": "Free to read online"
+    },
+    {
+      "id": "bharatavani",
+      "name": "Bharatavani",
+      "icon": "🗣️",
+      "category": "Indian books and languages",
+      "url": "https://bharatavani.in",
+      "about": "Government project with books and dictionaries in over 100 Indian languages.",
+      "license": "Free to read"
+    },
+    {
+      "id": "egyankosh",
+      "name": "eGyanKosh (IGNOU)",
+      "icon": "🎓",
+      "category": "Indian books and languages",
+      "url": "https://egyankosh.ac.in",
+      "about": "Free university study material from IGNOU.",
+      "license": "Free to read"
+    },
+    {
+      "id": "projectmadurai",
+      "name": "Project Madurai",
+      "icon": "🌺",
+      "category": "Indian books and languages",
+      "url": "https://www.projectmadurai.org",
+      "about": "Free Tamil literature, old and classic.",
+      "license": "Public domain"
+    },
+    {
+      "id": "pratilipi",
+      "name": "Pratilipi",
+      "icon": "✍️",
+      "category": "Indian books and languages",
+      "url": "https://www.pratilipi.com",
+      "about": "Stories shared by their own writers in 12 Indian languages. Mostly free.",
+      "license": "Shared by authors"
+    },
+    {
+      "id": "panjabdigilib",
+      "name": "Panjab Digital Library",
+      "icon": "🌾",
+      "category": "Indian books and languages",
+      "url": "https://www.panjabdigilib.org",
+      "about": "Digitized Punjabi books, manuscripts and newspapers.",
+      "license": "Free to read"
+    },
+    {
       "id": "gutenberg",
       "name": "Project Gutenberg",
       "icon": "📚",
