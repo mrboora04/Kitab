@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "internet-archive",
   "name": "Free Scanned Books",
-  "version": 2,
+  "version": 3,
   "lang": "multi",
   "license": "Free to read scans (Internet Archive)",
   "site": "https://archive.org/details/texts",
@@ -14,18 +14,18 @@
   "langFilter": {
     "param": "%20AND%20language%3A({v})",
     "values": {
+      "en": "eng%20OR%20English",
+      "es": "spa%20OR%20Spanish",
+      "fr": "fre%20OR%20French",
+      "de": "ger%20OR%20German",
+      "it": "ita%20OR%20Italian",
+      "pt": "por%20OR%20Portuguese",
+      "ru": "rus%20OR%20Russian",
+      "zh": "chi%20OR%20Chinese",
+      "ja": "jpn%20OR%20Japanese",
+      "ar": "ara%20OR%20Arabic",
       "hi": "hin%20OR%20Hindi",
-      "pa": "pan%20OR%20Punjabi%20OR%20Panjabi",
-      "ur": "urd%20OR%20Urdu",
-      "bn": "ben%20OR%20Bengali",
-      "mr": "mar%20OR%20Marathi",
-      "gu": "guj%20OR%20Gujarati",
-      "ta": "tam%20OR%20Tamil",
-      "te": "tel%20OR%20Telugu",
-      "kn": "kan%20OR%20Kannada",
-      "ml": "mal%20OR%20Malayalam",
-      "sa": "san%20OR%20Sanskrit",
-      "en": "eng%20OR%20English"
+      "la": "lat%20OR%20Latin"
     }
   },
   "search": {
@@ -52,82 +52,10 @@
       "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
     },
     {
-      "key": "india",
-      "label": "Digital Library of India",
-      "about": "Old Indian books scanned by the government",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20collection%3Adigitallibraryindia&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "hi",
-      "label": "Hindi",
-      "about": "Free scanned books in Hindi",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28hin%20OR%20Hindi%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "pa",
-      "label": "Punjabi",
-      "about": "Free scanned books in Punjabi",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28pan%20OR%20Punjabi%20OR%20Panjabi%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "ur",
-      "label": "Urdu",
-      "about": "Free scanned books in Urdu",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28urd%20OR%20Urdu%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "bn",
-      "label": "Bengali",
-      "about": "Free scanned books in Bengali",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28ben%20OR%20Bengali%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "mr",
-      "label": "Marathi",
-      "about": "Free scanned books in Marathi",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28mar%20OR%20Marathi%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "gu",
-      "label": "Gujarati",
-      "about": "Free scanned books in Gujarati",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28guj%20OR%20Gujarati%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "ta",
-      "label": "Tamil",
-      "about": "Free scanned books in Tamil",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28tam%20OR%20Tamil%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "te",
-      "label": "Telugu",
-      "about": "Free scanned books in Telugu",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28tel%20OR%20Telugu%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "kn",
-      "label": "Kannada",
-      "about": "Free scanned books in Kannada",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28kan%20OR%20Kannada%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "ml",
-      "label": "Malayalam",
-      "about": "Free scanned books in Malayalam",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28mal%20OR%20Malayalam%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "sa",
-      "label": "Sanskrit",
-      "about": "Free scanned books in Sanskrit",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28san%20OR%20Sanskrit%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
-    },
-    {
-      "key": "en",
-      "label": "English",
-      "about": "Free scanned books in English",
-      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20language%3A%28eng%20OR%20English%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
+      "key": "classics",
+      "label": "Classics",
+      "about": "Old books from the great public libraries",
+      "url": "https://archive.org/advancedsearch.php?q=mediatype%3Atexts%20AND%20-access-restricted-item%3Atrue%20AND%20collection%3A%28americana%20OR%20toronto%20OR%20europeanlibraries%29&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&sort%5B%5D=downloads%20desc&rows=24&page={page}&output=json"
     }
   ],
   "detail": {

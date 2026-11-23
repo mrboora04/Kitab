@@ -16,11 +16,11 @@ Then tap the download arrow next to a source. It shows up under **Browse → Sou
 
 | Source | What it reads | Books |
 |---|---|---|
-| Free Scanned Books | archive.org | Scanned books that are free to read on the Internet Archive (no lending-library items), with a list per language |
+| Free Scanned Books | archive.org | Scanned books anyone can read free on the Internet Archive (no lending-library items), in any language |
 | Open Library (free scans) | openlibrary.org, archive.org | Free scans anyone can borrow or download, EPUB and PDF |
 | Wikisource | en.wikisource.org | Free texts, exported as EPUB |
 
-Project Gutenberg and Standard Ebooks are built into Kitab itself, so they are not repeated here.
+Project Gutenberg is built into Kitab itself, so it is not repeated here.
 
 ## Why it is safe
 

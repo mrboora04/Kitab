@@ -802,8 +802,7 @@ const App = {
       const about = () => {
         if (!sum || sum.error) return '';
         const img = sum.thumbnail && sum.thumbnail.source ? `<img class="thumb" src="${esc(sum.thumbnail.source)}" alt="">` : '';
-        const link = sum.content_urls && sum.content_urls.desktop && sum.content_urls.desktop.page;
-        return `<h4>${lower ? 'On Wikipedia' : 'Wikipedia'}</h4>${img}<p><b>${esc(sum.title || term)}</b>${sum.description ? ' · ' + esc(sum.description) : ''}</p><p>${esc(sum.extract)}</p>${link ? `<a class="more" href="${esc(link)}">Read more on Wikipedia</a>` : ''}`;
+        return `<h4>${lower ? 'On Wikipedia' : 'Wikipedia'}</h4>${img}<p><b>${esc(sum.title || term)}</b>${sum.description ? ' · ' + esc(sum.description) : ''}</p><p>${esc(sum.extract)}</p>`;
       };
       html = lower ? meaning() + about() : about() + meaning();
       body.innerHTML = (html || `<p>Nothing found for “${esc(term)}”.</p>`) + '<p class="note">From Wikipedia and Wiktionary. Only the selected word is sent.</p>';

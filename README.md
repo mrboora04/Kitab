@@ -40,9 +40,9 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 ## How to use Kitab
 
 **1. Find a book.**
-Tap **Browse**, pick a catalog, search anything. Or use **Search all catalogs** at the top: it asks every catalog and every source you installed at once, and shows the answers as they come in (catalogs that need a login are skipped). Tap a cover, tap Download. It's yours, free.
+Tap **Browse**, pick a source, or search all of them at once. Pick a language under the search box to see books in that language only. Tap a cover, tap Download, and read it in Kitab. Kitab only shows books anyone can read: nothing that needs a login.
 
-**Want more places to find books?** On the Browse screen, tap **Add sources**: tap the arrow next to a source (Internet Archive, Open Library, Wikisource, ...) or the starter pack, and it appears under **Your sources**. Sources are small, checked recipes, not programs: they only reach the websites they list, and only offer free, public books. **Free book websites** lists more places worth knowing (StoryWeaver for kids, OpenStax textbooks, ...). Kitab hosts and stores no books: it looks them up and you download straight from the library. See [`store/`](store/README.md) to make your own list.
+**Want more places to find books?** On the Browse screen, tap **Add sources**: tap the arrow next to a source (Free Scanned Books, Open Library, Wikisource, ...) or the starter pack, and it appears under **Your sources**. Sources are small, checked recipes, not programs: they only reach the websites they list, and only offer free, public books. Kitab hosts and stores no books, and never sends you out to a website: everything is read inside the app. See [`store/`](store/README.md) to make your own list.
 
 **2. Or bring your own.**
 Tap **+ Add** and pick any EPUB, PDF or TXT from your phone.

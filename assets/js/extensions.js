@@ -1,5 +1,5 @@
 'use strict';
-/* Browse → Add sources (the store) and Free book websites. Installed sources, updates, packs, and the lists they come from. */
+/* Browse → Add sources (the store): installed sources, updates, packs, and the lists they come from. */
 
 const ExtUI = {
   loading: false,
@@ -38,13 +38,9 @@ const ExtUI = {
   },
 
   row(o) {
-    const ok = o.site && /^https:\/\//.test(o.site);
     const body = `<span class="src-icon">${esc(o.icon || '🧩')}</span>
       <span class="row-text"><b>${esc(o.name)}</b><small>${esc(o.sub)}</small>${o.badge ? `<span class="tags"><em>${esc(o.badge)}</em></span>` : ''}</span>`;
-    // a website row opens the site when tapped anywhere; a source row has a small globe for its website
-    if (o.main && ok) return `<div class="ext-row" data-id="${esc(o.id)}"><a class="row-main" href="${esc(o.site)}">${body}<span class="open-out" aria-hidden="true">↗</span></a>${o.action}</div>`;
-    const globe = ok ? `<a class="ext-btn" href="${esc(o.site)}" aria-label="Open the website">${this.ico.globe}</a>` : '';
-    return `<div class="ext-row" data-id="${esc(o.id)}">${body}${globe}${o.action}</div>`;
+    return `<div class="ext-row" data-id="${esc(o.id)}">${body}${o.action}</div>`;
   },
 
   draw() {
@@ -99,7 +95,6 @@ const ExtUI = {
       btn.onclick = () => this.act(btn.dataset.act, id, btn);
     });
     this.drawRepos();
-    if (Browse.tab === 'sites') this.drawSites();
   },
 
   drawRepos() {
@@ -164,36 +159,6 @@ const ExtUI = {
     App.toast(problems.length ? `Added ${done}. ${problems[0]}` : `Added ${done} source${done === 1 ? '' : 's'}. Find them under Your sources`, problems.length ? 6000 : 3500);
     this.draw();
     Browse.renderSources();
-  },
-
-  /* ---------------- Websites: a directory of free-book sites ---------------- */
-  renderSites() {
-    this.drawSites();
-    if (!Object.keys(Sources.indexes).length && !this.loading) this.refresh(false);
-  },
-
-  drawSites() {
-    const seen = new Set(), items = [], cats = [];
-    for (const r of Sources.repos) {
-      const ix = Sources.indexes[r.url];
-      for (const d of (ix && ix.directory) || []) { if (seen.has(d.id)) continue; seen.add(d.id); items.push({ d, r, ix }); if (!cats.includes(d.category)) cats.push(d.category); }
-    }
-    if (!items.length) { $('#sitesList').innerHTML = `<p class="none">${this.loading ? 'Loading…' : 'The list has not loaded yet. Check your internet connection, then open this tab again.'}</p>`; return; }
-    const html = [];
-    for (const cat of cats) {
-      html.push(`<h3 class="subhead">${esc(cat)}</h3>`);
-      for (const { d, r, ix } of items.filter((x) => x.d.category === cat)) {
-        const has = d.source && ix.sources.some((x) => x.id === d.source);
-        const mine = d.source && Sources.installed[d.source];
-        const action = has && !mine ? `<button class="ext-btn" data-act="install" data-repo="${esc(r.url)}" aria-label="Install the source">${this.ico.down}</button>` : (mine ? '<span class="tags"><em>Installed</em></span>' : '');
-        html.push(this.row({ id: d.source || d.id, name: d.name, icon: d.icon, site: d.url, sub: d.about, badge: d.license, action, main: true }));
-      }
-    }
-    $('#sitesList').innerHTML = html.join('');
-    $$('#sitesList .ext-row').forEach((row) => {
-      const btn = row.querySelector('[data-act]');
-      if (btn) btn.onclick = async () => { await this.act('install', row.dataset.id, btn); this.drawSites(); };
-    });
   },
 
   async details(id) {

@@ -8,13 +8,6 @@ const Browse = {
       url: 'https://www.gutenberg.org/ebooks.opds/',
       search: 'https://www.gutenberg.org/ebooks/search.opds/?query={searchTerms}',
     },
-    {
-      id: 'standardebooks', lang: 'en', name: 'Standard Ebooks', blurb: 'Carefully formatted free editions of classics', icon: '✒️',
-      url: 'https://standardebooks.org/feeds/opds',
-      search: 'https://standardebooks.org/feeds/opds/all?query={searchTerms}',
-      // Their full catalog feed may be for Patrons Circle members only; New releases is the free part.
-      fallback: 'https://standardebooks.org/feeds/opds/new-releases', fallbackTitle: 'New releases',
-    },
   ],
   custom: store.get('er.sources', []),
   stack: [],          // opened feeds, newest last: { source, url, feed, title, scroll }
@@ -25,12 +18,11 @@ const Browse = {
   busyLoads: 0,
   io: null,
   lang: store.get('er.lang', ''),      // global search language ('' = all)
-  LANGS: [['', 'All'], ['en', 'English'], ['hi', 'Hindi'], ['pa', 'Punjabi'], ['ur', 'Urdu'], ['bn', 'Bengali'], ['mr', 'Marathi'], ['gu', 'Gujarati'], ['ta', 'Tamil'], ['te', 'Telugu'], ['kn', 'Kannada'], ['ml', 'Malayalam'], ['sa', 'Sanskrit']],
-  tab: 'home',          // home, ext (Add sources) or sites (Free book websites)
+  LANGS: [['', 'All'], ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['ru', 'Russian'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['la', 'Latin']],
+  tab: 'home',          // home or ext (Add sources)
 
   init() {
     $('#goExt').onclick = () => this.go('ext');
-    $('#goSites').onclick = () => this.go('sites');
     $$('#pane-browse [data-go]').forEach((b) => { b.onclick = () => this.go(b.dataset.go); });
     ExtUI.init();
     this.drawLangs();
@@ -49,11 +41,9 @@ const Browse = {
     const inFeed = this.stack.length > 0;
     $('#sourceView').classList.toggle('hidden', inFeed || this.tab !== 'home');
     $('#extView').classList.toggle('hidden', inFeed || this.tab !== 'ext');
-    $('#sitesView').classList.toggle('hidden', inFeed || this.tab !== 'sites');
     $('#feedView').classList.toggle('hidden', !inFeed);
     if (inFeed) return;
     if (this.tab === 'ext') return ExtUI.render();
-    if (this.tab === 'sites') return ExtUI.renderSites();
     if (typeof App !== 'undefined' && App.tab === 'browse') ExtUI.warm();     // only once Browse is really on screen
     const card = (s, custom) => `
       <button class="source" data-src="${esc(s.id)}">
@@ -63,8 +53,6 @@ const Browse = {
       </button>`;
     const exts = Sources.list().map((d) => Sources.asCatalog(d));
     $('#sourceList').innerHTML = this.builtin.map((s) => card(s)).join('') + exts.map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
-    const n = Object.values(Sources.indexes).reduce((t, ix) => t + ((ix.directory || []).length), 0);
-    if (n) $('#sitesCount').textContent = `${n} sites worth knowing, for every age`;
     $$('#sourceList [data-src]').forEach((b) => {
       b.onclick = (e) => {
         if (e.target.dataset.del) return;
@@ -106,7 +94,7 @@ const Browse = {
     return src.lang === lang;
   },
 
-  /** Moves between the Browse home, Add sources and Free book websites. */
+  /** Moves between the Browse home and Add sources. */
   go(tab) {
     this.tab = tab;
     this.renderSources();
@@ -132,13 +120,8 @@ const Browse = {
     try {
       let feed;
       try { feed = await Opds.load(url.trim()); } catch (e) {
-        if (!e.needsLogin) throw e;
-        busy(false);
-        const login = await App.dialog({ title: 'Log in to ' + e.host, message: 'This catalog asks for your account. Kitab keeps the login on this phone and only sends it to ' + e.host + '.', login: true, ok: 'Log in' });
-        if (!login || !login.user) return;
-        Opds.saveLogin(url.trim(), login.user, login.pass);
-        busy(true, 'Checking the catalog…');
-        feed = await Opds.load(url.trim());
+        if (e.needsLogin || e.status === 401 || e.status === 403) throw new Error('This library needs a login. Kitab only uses libraries that anyone can read without one.');
+        throw e;
       }
       const host = new URL(url.trim()).host;
       const src = { id: 'c' + Date.now(), name: feed.title || host, blurb: host, url: url.trim(), icon: '🌐' };
@@ -166,21 +149,20 @@ const Browse = {
   openSource(src) { return this.open(src, src.url, src.name); },
 
   async open(src, url, title) {
+    if (!this.stack.length) {          // a fresh source: no leftovers from the last one under the spinner
+      $('#feedList').innerHTML = '';
+      $('#feedTitle').textContent = title || src.name;
+      $('#feedSearch').classList.add('hidden');
+      $('#feedLangs').classList.add('hidden');
+      $('#feedMore').classList.add('hidden');
+    }
     this.status('loading');
     try {
       const feed = await this.loadFeed(url, src);
       this.stack.push({ source: src, url, feed, title: title || feed.title, scroll: 0 });
       this.renderFeed();
     } catch (e) {
-      // a members-only catalog: try its free part first
-      if ((e.status === 401 || e.status === 403) && src.fallback && url === src.url && !this._triedFallback) {
-        this._triedFallback = true;
-        try { return await this.open(src, src.fallback, src.fallbackTitle || title); } finally { this._triedFallback = false; }
-      }
-      if (e.needsLogin) {
-        const login = await App.dialog({ title: 'Log in to ' + (src.name || e.host), message: 'This catalog asks for your account. Kitab keeps the login on this phone and only sends it to ' + e.host + '.', login: true, ok: 'Log in' });
-        if (login && login.user) { Opds.saveLogin(url, login.user, login.pass); return this.open(src, url, title); }
-      }
+      if (e.needsLogin || e.status === 401 || e.status === 403) e = new Error('This library needs a login. Kitab only uses libraries that anyone can read without one.');
       if (!this.stack.length) {   // nothing loaded yet: show an empty page with a header so Back still works
         $('#feedTitle').textContent = title || src.name;
         $('#feedSearch').classList.add('hidden');
@@ -196,7 +178,6 @@ const Browse = {
     this.errorShown = kind === 'error';
     if (kind === 'loading') {
       $('#extView').classList.add('hidden');
-      $('#sitesView').classList.add('hidden');
       $('#sourceView').classList.add('hidden');
       $('#feedView').classList.remove('hidden');
       box.innerHTML = '<div class="spinner"></div>';
@@ -214,7 +195,6 @@ const Browse = {
     const view = this.stack[this.stack.length - 1];
     if (!view) return this.renderSources();
     $('#extView').classList.add('hidden');
-    $('#sitesView').classList.add('hidden');
     $('#sourceView').classList.add('hidden');
     $('#feedView').classList.remove('hidden');
     $('#feedTitle').textContent = view.title || 'Catalog';

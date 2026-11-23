@@ -24,14 +24,9 @@ const Opds = (() => {
     return e;
   }
 
-  /* Catalog logins (Calibre-Web, Standard Ebooks Patrons...), kept on the phone and only sent to their own catalog. */
   const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return ''; } };
-  const authFor = (u) => (store.get('er.auth', {})[hostOf(u)] || '');
-  function saveLogin(u, user, pass) {
-    const all = store.get('er.auth', {});
-    all[hostOf(u)] = 'Basic ' + btoa(unescape(encodeURIComponent(user + ':' + pass)));
-    store.set('er.auth', all);
-  }
+  const authFor = () => '';          // Kitab uses no logins: only books anyone can read
+  try { localStorage.removeItem('er.auth'); } catch (e) { /* nothing saved */ }
 
   const pending = {};
   let counter = 0;
@@ -184,5 +179,5 @@ const Opds = (() => {
     return Object.assign(parse(r.body, r.url), { url: r.url });
   }
 
-  return { load, parse, answer, searchUrl, fetchText, saveLogin, authFor };
+  return { load, parse, answer, searchUrl, fetchText, authFor };
 })();
