@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "1.17",
-  "notes": "Downloads work again: books are recognised by their contents, and Project Gutenberg books come from its mirror while gutenberg.org is down",
+  "versionCode": 29,
+  "versionName": "1.18",
+  "notes": "Sources now come from kitab-sources, which checks every source against the real sites each day; a source that is not working says so",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "6f2339e18386bc9a6b488bb3ad11dbfa47dbd9c70c4d217c737b36223087bc8b"
+  "sha256": "514fea901e180f77b5d828185a14188f31040a60363716f6ae8675e3c4c96f7c"
 }

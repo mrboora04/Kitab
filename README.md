@@ -44,7 +44,7 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 **1. Find a book.**
 Tap **Browse**, pick a source, or search all of them at once. A source opens straight onto its books, with its lists (Popular, Latest, Fiction...) as chips along the top. Pick a language under the search box to see books in that language only. Tap a cover, tap Download, and read it in Kitab. Kitab only shows books anyone can read: nothing that needs a login.
 
-**Want more places to find books?** On the Browse screen, tap **Add sources**: tap the arrow next to a source (Free Scanned Books, Open Library, Wikisource, ...) or the starter pack, and it appears under **Your sources**. Sources are small, checked recipes, not programs: they only reach the websites they list, and only offer free, public books. Kitab hosts and stores no books, and never sends you out to a website: everything is read inside the app. See [`store/`](store/README.md) to make your own list.
+**Want more places to find books?** On the Browse screen, tap **Add sources**: tap the arrow next to a source (Free Scanned Books, Open Library, Wikisource, ...) or the starter pack, and it appears under **Your sources**. Sources are small, checked recipes, not programs: they only reach the websites they list, and only offer free, public books. Kitab hosts and stores no books, and never sends you out to a website: everything is read inside the app. The sources live in their own repository, [kitab-sources](https://github.com/mrboora04/kitab-sources), where every source is tried against the real sites each day; Kitab marks one that is not working right now.
 
 **2. Or bring your own.**
 Tap **+ Add** and pick any EPUB, PDF or TXT from your phone.

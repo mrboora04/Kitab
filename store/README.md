@@ -1,3 +1,5 @@
+> **The store has moved to [mrboora04/kitab-sources](https://github.com/mrboora04/kitab-sources).** Kitab 1.18 and newer read it from there. This copy stays for Kitab 1.17 and older, and as a fallback; change sources in kitab-sources.
+
 # Kitab sources (the extension store)
 
 The extension store for [Kitab](https://github.com/mrboora04/Kitab), kept in this `store/` folder: small, safe recipes that let the app find **free, public books** on the web. One link, like a Mihon extension repository.

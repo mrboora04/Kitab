@@ -41,7 +41,7 @@ const Browse = {
     const card = (s, custom) => `
       <button class="source" data-src="${esc(s.id)}">
         <span class="src-icon">${s.icon || '🌐'}</span>
-        <span class="src-text"><b>${esc(s.name)}</b><small>${esc(s.blurb || s.url)}</small></span>
+        <span class="src-text"><b>${esc(s.name)}</b><small>${esc(s.blurb || s.url)}</small>${this.downNote(s)}</span>
         ${custom ? `<span class="src-del" data-del="${esc(s.id)}" aria-label="Remove catalog">✕</span>` : '<span class="chev">›</span>'}
       </button>`;
     $('#sourceList').innerHTML = Sources.catalogs().map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
@@ -94,6 +94,15 @@ const Browse = {
   },
 
   all() { return Sources.catalogs().concat(this.custom); },
+
+  /** "Not working right now", when the store's daily check says so. */
+  downNote(s) {
+    const h = s.ext && s.def ? Sources.health(s.def.id) : null;
+    if (!h || h.working) return '';
+    const when = h.checkedAt ? new Date(h.checkedAt) : null;
+    const ago = when && !isNaN(when) ? Math.max(0, Math.round((Date.now() - when) / 864e5)) : null;
+    return `<small class="down">⚠️ Not working right now${ago == null ? '' : ago === 0 ? ' · checked today' : ` · checked ${ago} day${ago === 1 ? '' : 's'} ago`}</small>`;
+  },
 
   /** One place that reads a feed: built-in and your own catalogs (OPDS), or an installed source (ext: addresses). */
   async loadFeed(url, src) {

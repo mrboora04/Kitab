@@ -39,7 +39,7 @@ const ExtUI = {
 
   row(o) {
     const body = `<span class="src-icon">${esc(o.icon || '🧩')}</span>
-      <span class="row-text"><b>${esc(o.name)}</b><small>${esc(o.sub)}</small>${o.badge ? `<span class="tags"><em>${esc(o.badge)}</em></span>` : ''}</span>`;
+      <span class="row-text"><b>${esc(o.name)}</b><small>${esc(o.sub)}</small>${o.down ? '<small class="down">⚠️ Not working right now</small>' : ''}${o.badge ? `<span class="tags"><em>${esc(o.badge)}</em></span>` : ''}</span>`;
     return `<div class="ext-row" data-id="${esc(o.id)}">${body}${o.action}</div>`;
   },
 
@@ -65,7 +65,7 @@ const ExtUI = {
     }
     const installedRow = (it) => this.row({
       id: it.d.id, name: it.d.name, icon: it.d.icon, site: it.d.site,
-      sub: `${this.lang(it.d.lang)} · version ${it.d.version}`, badge: it.d.license,
+      sub: `${this.lang(it.d.lang)} · version ${it.d.version}`, badge: it.d.license, down: (Sources.health(it.d.id) || {}).working === false,
       action: it.newer ? `<button class="ext-btn accent" data-act="update" aria-label="Update">${this.ico.up}</button>` : `<button class="ext-btn" data-act="gear" aria-label="Details">${this.ico.gear}</button>`,
     });
     if (updates.length) html.push(`<h3 class="subhead">Updates</h3>${updates.map(installedRow).join('')}`);

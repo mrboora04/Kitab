@@ -11,7 +11,9 @@
  *
  * See store/SOURCE_FORMAT.md for the full format.
  */
-const OFFICIAL_REPO = 'https://raw.githubusercontent.com/mrboora04/Kitab/main/store/index.json';
+const OFFICIAL_REPO = 'https://raw.githubusercontent.com/mrboora04/kitab-sources/main/index.json';
+// where the store lived until Kitab 1.17: still read when the new address cannot be reached
+const LEGACY_REPO = 'https://raw.githubusercontent.com/mrboora04/Kitab/main/store/index.json';
 
 const Sources = {
   repos: store.get('er.repos', null) || [{ url: OFFICIAL_REPO, name: 'Kitab Official' }],
@@ -22,6 +24,26 @@ const Sources = {
   ctx: {},                                 // detail key -> what is needed to open one book's page
 
   saveRepos() { store.set('er.repos', this.repos); },
+
+  /** Settings saved by Kitab 1.17 and older point at the old store address. */
+  migrate() {
+    let changed = false;
+    for (const r of this.repos) if (r.url === LEGACY_REPO) { r.url = OFFICIAL_REPO; changed = true; }
+    this.repos = this.repos.filter((r, i, a) => a.findIndex((x) => x.url === r.url) === i);
+    if (changed) this.saveRepos();
+    let moved = false;
+    for (const x of Object.values(this.installed)) if (x.repo === LEGACY_REPO) { x.repo = OFFICIAL_REPO; moved = true; }
+    if (moved) this.saveInstalled();
+  },
+
+  /** What the store's daily check found for a source: { working, checkedAt } or null when it has not been checked. */
+  health(id) {
+    for (const r of this.repos) {
+      const ix = this.indexes[r.url], st = ix && ix.status && ix.status.sources && ix.status.sources[id];
+      if (st) return { working: st.working !== false, checkedAt: ix.status.checkedAt || '' };
+    }
+    return null;
+  },
   saveInstalled() { store.set('er.ext', this.installed); },
 
   /* ---------------- safety ---------------- */
@@ -66,7 +88,11 @@ const Sources = {
   async fetchIndex(repo, force) {
     const hit = this.indexes[repo.url];
     if (hit && !force && Date.now() - hit.at < 3600e3) return hit;
-    const r = await Opds.fetchText(repo.url);
+    let r;
+    try { r = await Opds.fetchText(repo.url); } catch (e) {
+      if (repo.url !== OFFICIAL_REPO) throw e;
+      r = await Opds.fetchText(LEGACY_REPO);        // the official store's older home
+    }
     let idx;
     try { idx = JSON.parse(r.body); } catch (e) { throw new Error('That address is not a Kitab source list'); }
     if (!idx || idx.schema !== 1 || !Array.isArray(idx.sources)) throw new Error('That address is not a Kitab source list');
@@ -78,7 +104,12 @@ const Sources = {
     const packs = (Array.isArray(idx.packs) ? idx.packs : [])
       .filter((k) => k && /^[a-z0-9-]{2,40}$/.test(k.id || '') && typeof k.name === 'string' && Array.isArray(k.sources)).slice(0, 10)
       .map((k) => ({ id: k.id, name: text(k.name, 60), icon: text(k.icon || '🎁', 4), about: text(k.about, 140), sources: k.sources.filter((i) => /^[a-z0-9-]{2,40}$/.test(i)).slice(0, 12) }));
-    const out = { name: String(idx.name || repo.name || 'Repository').slice(0, 60), sources, directory, packs, base: r.url || repo.url, at: Date.now() };
+    const out = { name: String(idx.name || repo.name || 'Repository').slice(0, 60), sources, directory, packs, base: r.url || repo.url, at: Date.now(), status: null };
+    // the daily check's results, next to the list (optional: a list without one is fine)
+    try {
+      const st = JSON.parse((await Opds.fetchText(new URL('status.json', out.base).toString())).body);
+      if (st && typeof st.sources === 'object') out.status = { checkedAt: String(st.checkedAt || '').slice(0, 30), sources: st.sources };
+    } catch (e) { /* no status yet */ }
     this.indexes[repo.url] = out;
     return out;
   },
@@ -355,3 +386,5 @@ const Sources = {
     return { title: def.name, entries: [{ id: '', title: '', authors: [], summary: this.dom(doc, d.summary, base), formats, cover: '' }], next: null };
   },
 };
+
+Sources.migrate();

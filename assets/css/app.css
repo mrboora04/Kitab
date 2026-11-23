@@ -706,3 +706,6 @@ body[data-theme="dusk"] #feedList > .li.nav.tile, body[data-theme="night"] #feed
 .update-bar .btn { flex: none; }
 .linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; }
 #feedList > .li.gbook .cover img { background: transparent; }
+
+/* The store's daily check says this source is not working */
+small.down { display: block; color: #b4542c; font-weight: 600; margin-top: 2px; }
