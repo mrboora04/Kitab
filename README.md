@@ -102,9 +102,12 @@ The signing key is generated on first build in `.tools/` and is not committed. B
 different key can't install over an existing copy, so to update the app you'd need to uninstall it
 first (your reading progress is lost when you do). Set `KEYSTORE`/`STOREPASS` to keep one key across builds.
 
-**Publishing an update:** raise `versionCode`/`versionName` in `AndroidManifest.xml`, build, commit `dist/Kitab.apk`, then write
-[`update.json`](update.json) with the new version, a line of notes and the APK's SHA-256. Installed copies read that file
+**Publishing an update:** raise `versionCode` and `versionName` in `AndroidManifest.xml` and push to `main`, with a commit
+message that says what's new. The [release workflow](.github/workflows/release.yml) then builds Kitab on GitHub, signs it
+with the key kept in the repository secrets (`KITAB_KEYSTORE_B64`, the base64 of the `.p12`; optional `KITAB_STOREPASS`),
+and commits `dist/Kitab.apk` and [`update.json`](update.json) (version, notes, SHA-256). Installed copies read that file
 (every 6 hours, or when you tap *Check for updates*), download the APK, check its SHA-256, and hand it to Android's installer.
+The key itself is never committed.
 
 To work on the UI in a desktop browser, serve `assets/` with a `books/` folder next to `index.html`
 (e.g. `python3 -m http.server`). Native-only features are stubbed out.

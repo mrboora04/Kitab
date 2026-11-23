@@ -1,0 +1,59 @@
+name: Build and publish Kitab
+# When the version in AndroidManifest.xml changes on main (or when run by hand from the Actions tab), GitHub
+# builds Kitab, signs it with the key kept in this repository's secrets, and commits dist/Kitab.apk and
+# update.json. Phones with Kitab then show the Update button.
+on:
+  push:
+    branches: [main]
+    paths: ['AndroidManifest.xml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, sign, publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Signing key from the repository secrets
+        env:
+          KEY_B64: ${{ secrets.KITAB_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEY_B64" ]; then
+            echo "::error::Add the KITAB_KEYSTORE_B64 secret (Settings > Secrets and variables > Actions). Without the same key, phones cannot install the update."
+            exit 1
+          fi
+          mkdir -p .tools
+          printf '%s' "$KEY_B64" | base64 -d > .tools/release.p12
+
+      - name: Build and sign
+        env:
+          STOREPASS: ${{ secrets.KITAB_STOREPASS }}
+        run: |
+          export STOREPASS="${STOREPASS:-kitab-reader}"
+          ./build.sh
+          keytool -printcert -jarfile dist/Kitab.apk | grep -m1 SHA256
+
+      - name: Write update.json
+        run: python3 tools/write_update.py "$(git log -1 --pretty=%s)"
+
+      - name: Remove the key from the build machine
+        if: always()
+        run: rm -f .tools/release.p12
+
+      - name: Commit the new app
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/Kitab.apk update.json
+          if git diff --cached --quiet; then echo "Nothing new to publish"; exit 0; fi
+          git commit -m "Publish Kitab $(python3 -c "import json;print(json.load(open('update.json'))['versionName'])") [skip ci]"
+          git push
