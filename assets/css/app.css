@@ -709,3 +709,17 @@ body[data-theme="dusk"] #feedList > .li.nav.tile, body[data-theme="night"] #feed
 
 /* The store's daily check says this source is not working */
 small.down { display: block; color: #b4542c; font-weight: 600; margin-top: 2px; }
+
+/* Reading a scanned book online, page by page */
+.scan-online { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.so-page { position: relative; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.so-page img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .2s; user-select: none; -webkit-user-select: none; }
+.so-page.loaded img { opacity: 1; }
+.so-page.loaded .so-wait { display: none; }
+.so-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #666; }
+.so-text { position: absolute; inset: 0; }
+.so-text span { position: absolute; color: transparent; line-height: 1; white-space: pre; overflow: hidden; }
+.so-text span::selection { background: rgba(255, 196, 0, .4); color: transparent; }
+body[data-theme="night"] .so-page.loaded img, body[data-theme="dusk"] .so-page.loaded img { filter: invert(.9) hue-rotate(180deg); }
+.keep-btn { display: none; padding: 5px 12px; font-size: 14px; }
+body.is-online .keep-btn { display: inline-block; }

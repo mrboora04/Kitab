@@ -313,6 +313,8 @@ const Sources = {
     };
     const cover = this.val(map.cover, it);
     if (this.coverOk(def, cover)) e.cover = cover;
+    const read = this.val(map.read, it);                 // the book's pages, to read online before downloading
+    if (read && this.hostOk(def, String(read))) e.read = String(read);
     e.formats = this.formats(def, (map.formats || []).map((f) => ({ format: f.format, url: this.val(f.url, it) })));
     if (!e.formats.length && def.detail && this.val({ tpl: def.detail.url }, it)) {
       const key = def.id + Math.random().toString(36).slice(2, 9);
@@ -340,7 +342,9 @@ const Sources = {
     const r = await this.fetch(def, this.val({ tpl: d.url }, it));
     let body;
     try { body = JSON.parse(r.body); } catch (e) { throw new Error('The site did not answer with data Kitab can read'); }
-    const out = { summary: this.plain(this.pick(body, d.summary)), formats: [] };
+    const out = { summary: this.plain(this.pick(body, d.summary)), formats: [], read: '' };
+    const read = d.read ? this.val(d.read, Object.assign({}, it, body)) : '';
+    if (read && this.hostOk(def, String(read))) out.read = String(read);
     if (d.formats) {
       const pick = d.formats, files = this.pick(body, pick.list) || [];
       for (const f of Array.isArray(files) ? files : []) {
@@ -354,7 +358,7 @@ const Sources = {
       out.formats = this.formats(def, out.formats).sort((a, b) => (b.score - a.score) || ((a.size || 9e12) - (b.size || 9e12)))
         .filter((f) => !kinds.has(f.format) && kinds.add(f.format));
     }
-    return { title: def.name, entries: [{ id: '', title: '', authors: [], summary: out.summary, formats: out.formats, cover: '' }], next: null };
+    return { title: def.name, entries: [{ id: '', title: '', authors: [], summary: out.summary, formats: out.formats, read: out.read, cover: '' }], next: null };
   },
 
   /* --- HTML sources (the recipe names CSS selectors) --- */

@@ -6,9 +6,9 @@
       "id": "internet-archive",
       "name": "Free Scanned Books",
       "lang": "multi",
-      "version": 4,
+      "version": 5,
       "file": "sources/internet-archive.json",
-      "sha256": "b44339d23e4fcab03151f4e42349090134fbad5ecfaf5526517cb50d9cf2251c",
+      "sha256": "666ce93bb8d13e5d7a24dbf28c07e02e657c4f60aa4ff85805f73235ba772ede",
       "site": "https://archive.org/details/texts",
       "icon": "🏛️",
       "license": "Free to read scans (Internet Archive)"

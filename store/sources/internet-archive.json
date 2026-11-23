@@ -2,13 +2,14 @@
   "schema": 1,
   "id": "internet-archive",
   "name": "Free Scanned Books",
-  "version": 4,
+  "version": 5,
   "lang": "multi",
   "license": "Free to read scans (Internet Archive)",
   "site": "https://archive.org/details/texts",
   "icon": "🏛️",
   "hosts": [
-    "archive.org"
+    "archive.org",
+    "iiif.archive.org"
   ],
   "type": "json",
   "langFilter": {
@@ -41,6 +42,9 @@
       "authors": "creator",
       "cover": {
         "tpl": "https://archive.org/services/img/{identifier}"
+      },
+      "read": {
+        "tpl": "https://iiif.archive.org/iiif/3/{identifier}/manifest.json"
       }
     }
   },

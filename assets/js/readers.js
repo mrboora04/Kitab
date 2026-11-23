@@ -1577,3 +1577,138 @@ class EpubReader {
     this.frame.remove();
   }
 }
+
+
+/* ======================================================================
+ * ScanOnlineReader: a scanned book read online, page by page, from its IIIF page list
+ * (the Internet Archive publishes one for every book). Each page is a picture sized to the screen; the
+ * library's own OCR words lie over it, invisible, so text can be selected, looked up and read aloud.
+ * Nothing is downloaded but the pages you look at. A location is { page }.
+ * ==================================================================== */
+class ScanOnlineReader {
+  constructor(stage, app, url) {
+    this.app = app;
+    this.url = url;
+    this.n = 1;
+    this.pages = [];
+    this.words = new Map();
+    this.wrap = document.createElement('div');
+    this.wrap.className = 'scan-online';
+    stage.appendChild(this.wrap);
+    attachGestures(this.wrap, app, () => true);
+    this._resize = () => this.relayout();
+    window.addEventListener('resize', this._resize);
+  }
+
+  static label(l) {
+    if (!l) return '';
+    if (typeof l === 'string') return l;
+    const v = Object.values(l)[0];
+    return Array.isArray(v) ? String(v[0] || '') : String(v || '');
+  }
+
+  async open(loc) {
+    const r = await Opds.fetchText(this.url);
+    let m;
+    try { m = JSON.parse(r.body); } catch (e) { throw new Error('The library did not send the pages of this book'); }
+    const canvases = m.items || (m.sequences && m.sequences[0] && m.sequences[0].canvases) || [];
+    this.pages = canvases.map((c) => {
+      const anno = c.items && c.items[0] && c.items[0].items && c.items[0].items[0];
+      const body = anno && anno.body;
+      const svc = body && body.service && body.service[0];
+      const v2 = c.images && c.images[0] && c.images[0].resource;          // IIIF version 2
+      return {
+        w: Number(c.width) || 1000, h: Number(c.height) || 1500, label: ScanOnlineReader.label(c.label),
+        svc: (svc && (svc.id || svc['@id'])) || (v2 && v2.service && v2.service['@id']) || '',
+        img: (body && body.id) || (v2 && v2['@id']) || '',
+        text: (c.annotations && c.annotations[0] && c.annotations[0].id) || '',
+      };
+    }).filter((p) => /^https:/.test(p.svc || p.img));
+    if (!this.pages.length) throw new Error('This book has no pages to show');
+    this.title = ScanOnlineReader.label(m.label);
+    this.n = clamp(loc && loc.page || 1, 1, this.pages.length);
+    this.show();
+  }
+
+  imageUrl(p, width) {
+    const w = Math.min(1600, Math.max(400, Math.round(width)));
+    return p.svc ? `${p.svc}/full/${w},/0/default.jpg` : p.img;
+  }
+
+  /** The page fitted to the screen, with its words laid over it once they arrive. */
+  show() {
+    const p = this.pages[this.n - 1];
+    const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
+    const scale = Math.min((W - 8) / p.w, (H - 8) / p.h);
+    const box = document.createElement('div');
+    box.className = 'so-page';
+    box.style.width = Math.round(p.w * scale) + 'px';
+    box.style.height = Math.round(p.h * scale) + 'px';
+    box._n = this.n;
+    const dpr = window.devicePixelRatio || 1;
+    box.innerHTML = `<div class="so-wait"><div class="spinner"></div></div><img alt="" draggable="false"><div class="so-text"></div>`;
+    const img = box.querySelector('img');
+    img.onload = () => box.classList.add('loaded');
+    img.onerror = () => { box.querySelector('.so-wait').innerHTML = '<p>This page did not load. Check your internet connection, then turn the page again.</p>'; };
+    img.src = this.imageUrl(p, p.w * scale * dpr);
+    this.wrap.innerHTML = '';
+    this.wrap.appendChild(box);
+    this.cur = box;
+    this.layWords(this.n, box, scale);
+    // the next pages wait in the browser's cache, so turning is instant
+    for (const k of [1, 2]) {
+      const q = this.pages[this.n - 1 + k];
+      if (q) { const s2 = Math.min((W - 8) / q.w, (H - 8) / q.h); new Image().src = this.imageUrl(q, q.w * s2 * dpr); }
+    }
+    this.app.onRelocated();
+  }
+
+  /** The library's OCR words for page n: [{ t, x, y, w, h }] in the page's own pixels. */
+  async wordsOf(n) {
+    if (this.words.has(n)) return this.words.get(n);
+    const p = this.pages[n - 1];
+    let list = [];
+    if (p && /^https:/.test(p.text)) {
+      try {
+        const d = JSON.parse((await Opds.fetchText(p.text)).body);
+        list = (d.items || d.resources || []).map((a) => {
+          const body = a.body || a.resource || {};
+          const t = String(body.value || body.chars || '').trim();
+          const m = /xywh=(\d+),(\d+),(\d+),(\d+)/.exec(typeof a.target === 'string' ? a.target : a.on || '');
+          return t && m ? { t, x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null;
+        }).filter(Boolean);
+      } catch (e) { list = []; }
+    }
+    this.words.set(n, list);
+    return list;
+  }
+
+  async layWords(n, box, scale) {
+    const list = await this.wordsOf(n);
+    if (this.cur !== box) return;
+    box.querySelector('.so-text').innerHTML = list.map((w) =>
+      `<span style="left:${(w.x * scale).toFixed(1)}px;top:${(w.y * scale).toFixed(1)}px;width:${(w.w * scale).toFixed(1)}px;height:${(w.h * scale).toFixed(1)}px;font-size:${(w.h * scale * 0.9).toFixed(1)}px">${esc(w.t)} </span>`).join('');
+  }
+
+  async next() { if (this.n >= this.pages.length) return false; this.n++; this.show(); return true; }
+  async prev() { if (this.n <= 1) return false; this.n--; this.show(); return true; }
+  async goTo(loc) { this.n = clamp(loc && loc.page || 1, 1, this.pages.length); this.show(); }
+  goToProgress(f) { return this.goTo({ page: Math.round(f * (this.pages.length - 1)) + 1 }); }
+
+  location() {
+    const total = this.pages.length, p = this.pages[this.n - 1] || {};
+    const printed = p.label && p.label !== String(this.n) && /^[\divxlcIVXLC]{1,8}$/.test(p.label) ? ` (p. ${p.label})` : '';
+    return { loc: { page: this.n }, progress: total > 1 ? (this.n - 1) / (total - 1) : 0, label: `Page ${this.n} of ${total}${printed}`, chapter: '' };
+  }
+
+  toc() { return []; }
+  async visibleText() { return (await this.wordsOf(this.n)).map((w) => w.t).join(' '); }
+  clearSelection() { const s = window.getSelection(); if (s) s.removeAllRanges(); }
+  apply() { this.relayout(); }
+  relayout() { if (this.pages.length) this.show(); }
+
+  destroy() {
+    window.removeEventListener('resize', this._resize);
+    this.wrap.remove();
+  }
+}

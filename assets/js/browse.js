@@ -366,14 +366,14 @@ const Browse = {
         const doc = await this.loadFeed(e.detail, e._src);
         const full = doc.entries.find((x) => x.formats && x.formats.length);
         if (full) {
-          Object.assign(e, { formats: full.formats, summary: full.summary || e.summary, cover: e.cover || full.cover });
+          Object.assign(e, { formats: full.formats, summary: full.summary || e.summary, cover: e.cover || full.cover, read: e.read || full.read });
           if (!e.authors.length) e.authors = full.authors;
           e._done = true;
         } else if (doc.entries.length > 1 && e.maybeFolder) {
           e.nav = e.detail;                      // not a single book: it is a folder of entries
         } else {
           const one = doc.entries[0];
-          if (one) { e.summary = one.summary || e.summary; if (!e.authors.length) e.authors = one.authors; }
+          if (one) { e.summary = one.summary || e.summary; if (!e.authors.length) e.authors = one.authors; if (one.read) e.read = one.read; }
           e._done = true;
         }
         e._error = '';
@@ -565,9 +565,9 @@ const Browse = {
       ? `<button class="btn primary wide" disabled>Downloading… ${dl.pct}%</button><div class="dlbar"><i style="width:${dl.pct}%"></i></div>`
       : have
         ? `<button class="btn primary wide" id="readNow">Read now</button>`
-        : e.formats.length
-          ? e.formats.slice(0, 3).map((f, i) => `<button class="btn ${i ? '' : 'primary'} wide" data-dl="${i}">Download ${f.format}${f.size ? ` · ${Math.max(1, Math.round(f.size / 1024 / 102.4) / 10)} MB` : ''}</button>`).join('')
-          : `<p class="muted">${e._loading ? 'Loading details…' : esc(e._error || 'No EPUB or PDF download is offered for this book.')}</p>`;
+        : (e.read ? `<button class="btn primary wide" id="readOnline">Read now</button>` : '') + (e.formats.length
+          ? e.formats.slice(0, 3).map((f, i) => `<button class="btn ${i || e.read ? '' : 'primary'} wide" data-dl="${i}">${e.read ? 'Keep' : 'Download'} ${f.format}${f.size ? ` · ${Math.max(1, Math.round(f.size / 1024 / 102.4) / 10)} MB` : ''}</button>`).join('')
+          : e.read ? '' : `<p class="muted">${e._loading ? 'Loading details…' : esc(e._error || 'No EPUB or PDF download is offered for this book.')}</p>`);
     $('#sheetBody').innerHTML = `
       <div class="sheet-book">
         <span class="thumb big">${e.cover ? `<img src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
@@ -576,6 +576,8 @@ const Browse = {
       ${e.summary ? `<p class="summary">${esc(e.summary.slice(0, 600))}${e.summary.length > 600 ? '…' : ''}</p>` : ''}
       <div class="actions">${buttons}</div>`;
     $$('#sheetBody [data-dl]').forEach((b) => { b.onclick = () => this.download(e, e.formats[b.dataset.dl]); });
+    const ro = $('#readOnline');
+    if (ro) ro.onclick = () => { this.closeSheet(); App.openOnline(e); };
     const rn = $('#readNow');
     if (rn) rn.onclick = () => { const f = this.saved[e.id || e.title]; this.closeSheet(); App.openBook(f); };
   },

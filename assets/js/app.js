@@ -135,6 +135,37 @@ const App = {
     return list.map((b) => Object.assign(b, { meta: this.bookMeta(b.name) }));
   },
 
+  /** Books read online (pages from the library's website, nothing downloaded): only in History. */
+  onlineBooks() {
+    return store.get('er.online', []).map((name) => ({ name, online: true, meta: this.bookMeta(name) })).filter((b) => b.meta.online);
+  },
+
+  /** Opens a book from a source page by page, without downloading it. "Keep" downloads it later. */
+  openOnline(e) {
+    let h = 0;
+    for (const ch of e.read) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const name = 'online:' + h.toString(36);
+    const meta = this.bookMeta(name);
+    Object.assign(meta, {
+      title: e.title, author: (e.authors || []).join(', '), cover: meta.cover || e.cover || '',
+      online: { read: e.read, formats: (e.formats || []).slice(0, 3), id: e.id || '', source: (e._src && e._src.name) || '' },
+    });
+    store.set(this.bookKey(name), meta);
+    store.set('er.online', [name].concat(store.get('er.online', []).filter((n) => n !== name)).slice(0, 200));
+    this.openBook(name);
+  },
+
+  /** Keep: download the book being read online into the library. */
+  keepOnline() {
+    const o = this.meta && this.meta.online;
+    const f = o && o.formats && o.formats[0];
+    if (!f) return toast('This library offers no file to keep, only reading online');
+    if (!window.Android || !Android.downloadBook) return toast('Keeping books works in the Kitab app');
+    const entry = { id: o.id || this.meta.title, title: this.meta.title, cover: /^https:/.test(this.meta.cover || '') ? this.meta.cover : '', formats: o.formats };
+    Browse.download(entry, f);
+    toast(`Keeping “${this.meta.title}”: it will be in your library when the download ends`, 3500);
+  },
+
   state(b) {
     const p = b.meta.progress || 0;
     return b.meta.finished || p >= 0.97 ? 'finished' : p > 0 ? 'reading' : 'unread';
@@ -212,13 +243,13 @@ const App = {
   },
 
   renderHistory() {
-    const books = this.books().filter((b) => b.meta.lastRead).sort((a, b) => b.meta.lastRead - a.meta.lastRead);
+    const books = this.books().concat(this.onlineBooks()).filter((b) => b.meta.lastRead).sort((a, b) => b.meta.lastRead - a.meta.lastRead);
     $('#historyEmpty').classList.toggle('hidden', books.length > 0);
     $('#historyList').innerHTML = books.map((b) => `
       <button class="li item" data-open="${esc(b.name)}">
         <span class="thumb">${b.meta.cover ? `<img src="${esc(b.meta.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc((b.meta.title || b.name).slice(0, 1))}</i></span>
         <span class="row-text"><b>${esc(b.meta.title || prettyName(b.name))}</b>
-          <small>${Math.round((b.meta.progress || 0) * 100)}% · ${ago(b.meta.lastRead)}</small>
+          <small>${Math.round((b.meta.progress || 0) * 100)}% · ${ago(b.meta.lastRead)}${b.online ? ' · online' : ''}</small>
           <span class="mini"><i style="width:${Math.round((b.meta.progress || 0) * 100)}%"></i></span></span>
       </button>`).join('');
     $$('#historyList [data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
@@ -226,6 +257,8 @@ const App = {
     $('#clearHistory').onclick = async () => {
       if (!(await this.dialog({ title: 'Clear history?', message: 'Your books and bookmarks stay. Reading positions are forgotten.', ok: 'Clear', danger: true }))) return;
       this.books().forEach((b) => { const m = b.meta; delete m.lastRead; delete m.loc; m.progress = 0; store.set(this.bookKey(b.name), m); });
+      this.onlineBooks().forEach((b) => store.del(this.bookKey(b.name)));
+      store.set('er.online', []);
       this.renderHistory();
     };
   },
@@ -319,7 +352,8 @@ const App = {
     Native.setSecure && Native.setSecure(!!this.settings.protect);   // book pages are protected from screenshots
     this.name = name;
     this.meta = this.bookMeta(name);
-    const type = extOf(name);
+    const type = /^online:/.test(name) ? 'online' : extOf(name);
+    document.body.classList.toggle('is-online', type === 'online');
     const url = 'books/' + encodeURIComponent(name);
     document.body.classList.toggle('is-pdf', type === 'pdf');
     document.body.classList.toggle('is-epub', type === 'epub');
@@ -343,6 +377,11 @@ const App = {
         if (!this.meta.cover) this.pdfCover();
         if (this.meta.scanned && !this.meta.scanComplete) setTimeout(() => this.name === name && BookScanner.start(name, this.reader.location().loc.page || 1), 1500);
         this.showScanState(OCR.current && OCR.current.label);
+      } else if (type === 'online') {
+        if (!this.meta.online || !this.meta.online.read) throw new Error('This book is no longer available online');
+        this.reader = new ScanOnlineReader($('#stage'), this, this.meta.online.read);
+        await this.reader.open(this.meta.loc);
+        if (this.reader.title && !this.meta.title) this.meta.title = this.reader.title;
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
         await this.reader.open(this.meta.loc);
@@ -439,7 +478,7 @@ const App = {
     if (this.pdf) { this.pdf.destroy(); this.pdf = null; this.outline = null; }
     this.name = null;
     this.meta = null;
-    document.body.classList.remove('is-pdf', 'is-epub', 'pdf-reflow');
+    document.body.classList.remove('is-pdf', 'is-epub', 'is-online', 'pdf-reflow');
     Native.setKeepScreenOn(false);
     Native.setFullscreen(false);
     Native.setBrightness(-1);
@@ -538,6 +577,7 @@ const App = {
 
   bindReader() {
     $('#backBtn').onclick = () => this.closeBook();
+    $('#keepBtn').onclick = () => this.keepOnline();
     $('#prevBtn').onclick = () => this.turn(-1);
     $('#nextBtn').onclick = () => this.turn(1);
     $('#settingsBtn').onclick = () => this.openPanel('#settingsPanel');
