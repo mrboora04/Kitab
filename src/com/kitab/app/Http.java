@@ -11,13 +11,14 @@ import java.net.URL;
 
 /** Small blocking HTTP client for catalog pages and book downloads. No Android dependencies, so it is testable on a plain JVM. */
 final class Http {
-    static final String USER_AGENT = "Kitab/1.16 (https://github.com/mrboora04/Kitab; Android ebook reader)";
+    static final String USER_AGENT = "Kitab/1.17 (https://github.com/mrboora04/Kitab; Android ebook reader)";
     static final int MAX_REDIRECTS = 8;
 
     static final class Result {
         int status;
         String url;          // final address after redirects
         String contentType;
+        String disposition;  // Content-Disposition, which often carries the real file name
         byte[] body;
     }
 
@@ -99,7 +100,19 @@ final class Http {
             r.status = c.getResponseCode();
             r.url = c.getURL().toString();
             r.contentType = c.getContentType();
-            if (r.status != 200) throw new IOException("Server answered " + r.status);
+            r.disposition = c.getHeaderField("Content-Disposition");
+            if (r.status >= 500 || r.status == 429) {
+                // Project Gutenberg is down or busy: its official mirror has the same files
+                String mirror = gutenbergMirror(r.url);
+                if (mirror != null && !mirror.equals(address)) {
+                    c.disconnect();
+                    return download(mirror, dest, maxBytes, progress, null);
+                }
+                throw new IOException("The library is down or busy right now (" + r.status + "). Try again later");
+            }
+            if (r.status == 404) throw new IOException("The library no longer has this file (404)");
+            if (r.status == 401 || r.status == 403) throw new IOException("The library refused the download (" + r.status + "). It may be for members only");
+            if (r.status != 200) throw new IOException("The library answered " + r.status);
             long total = c.getContentLength();
             if (total > maxBytes) throw new IOException("File is too large");
             long done = 0;
@@ -121,6 +134,65 @@ final class Http {
             c.disconnect();
             if (part.exists()) part.delete();
         }
+    }
+
+    /** What a downloaded file really is, from its first bytes; then the server's labels. Throws a plain reason when it is not a book. */
+    static String bookType(File f, Result r) throws IOException {
+        byte[] head = new byte[512];
+        int n = 0;
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            int k;
+            while (n < head.length && (k = in.read(head, n, head.length - n)) > 0) n += k;
+        }
+        String start = new String(head, 0, n, "ISO-8859-1");
+        if (start.startsWith("%PDF")) return ".pdf";
+        if (start.startsWith("PK\u0003\u0004")) {
+            // an EPUB is a zip whose first entry is "mimetype" holding application/epub+zip
+            if (start.contains("application/epub+zip") || start.contains("META-INF")) return ".epub";
+            String label = extensionFor(r.contentType, r.url);
+            if (".epub".equals(label) || ".epub".equals(fromDisposition(r.disposition))) return ".epub";
+            throw new IOException("The library sent a zip file, not a book Kitab can open");
+        }
+        String trimmed = start.replaceFirst("^(\u00ef\u00bb\u00bf)?\\s*", "").toLowerCase();
+        if (trimmed.startsWith("<!doctype html") || trimmed.startsWith("<html") || trimmed.startsWith("<head") || trimmed.startsWith("<!--")) {
+            if (trimmed.contains("maintenance")) throw new IOException("The library is down for maintenance right now. Try again later");
+            throw new IOException("The library sent a web page instead of the book. This book can't be downloaded from here");
+        }
+        String label = extensionFor(r.contentType, r.url);
+        if (label == null) label = fromDisposition(r.disposition);
+        if (".txt".equals(label)) return label;
+        if (label != null) throw new IOException("The file is damaged or is not really " + label.substring(1).toUpperCase());
+        throw new IOException("This file type is not supported (EPUB or PDF only)");
+    }
+
+    static final String PG_MIRROR = "https://gutenberg.pglaf.org";
+    private static final java.util.regex.Pattern PG_BOOK = java.util.regex.Pattern.compile("^/ebooks/(\\d+)\\.(epub3\\.images|epub\\.images|epub\\.noimages|epub|txt\\.utf-8|txt)$");
+
+    /** The same Project Gutenberg file on its mirror, or null when the address is not a Gutenberg book file. */
+    static String gutenbergMirror(String address) {
+        URL u;
+        try { u = new URL(address); } catch (Exception e) { return null; }
+        String host = u.getHost().toLowerCase();
+        if (!host.equals("www.gutenberg.org") && !host.equals("gutenberg.org")) return null;
+        String path = u.getPath();
+        if (path.startsWith("/cache/epub/")) return PG_MIRROR + path;
+        java.util.regex.Matcher m = PG_BOOK.matcher(path);
+        if (!m.matches()) return null;
+        String n = m.group(1), kind = m.group(2), file;
+        if (kind.equals("epub3.images")) file = "pg" + n + "-images-3.epub";
+        else if (kind.equals("epub.images")) file = "pg" + n + "-images.epub";
+        else if (kind.startsWith("txt")) file = "pg" + n + ".txt";
+        else file = "pg" + n + ".epub";
+        return PG_MIRROR + "/cache/epub/" + n + "/" + file;
+    }
+
+    static String fromDisposition(String d) {
+        if (d == null) return null;
+        String x = d.toLowerCase();
+        if (x.contains(".epub")) return ".epub";
+        if (x.contains(".pdf")) return ".pdf";
+        if (x.contains(".txt")) return ".txt";
+        return null;
     }
 
     /** File extension for a download, from its content type, then its address. Null when it is not a book we read. */

@@ -534,8 +534,8 @@ public class MainActivity extends Activity {
                             }
                         }
                     }, auth);
-                    String ext = Http.extensionFor(r.contentType, r.url);
-                    if (ext == null) { tmp.delete(); throw new Exception("This file type is not supported (EPUB or PDF only)"); }
+                    String ext;
+                    try { ext = Http.bookType(tmp, r); } catch (Exception bad) { tmp.delete(); throw bad; }
                     File dest = new File(booksDir, base + ext);
                     if (dest.exists()) dest.delete();
                     if (!tmp.renameTo(dest)) { tmp.delete(); throw new Exception("Could not save the book"); }
