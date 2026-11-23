@@ -186,11 +186,13 @@ const Sources = {
     if (typeof spec === 'object' && spec.tpl) {
       let missing = false;
       const s = spec.tpl.replace(/\{([^}]+)\}/g, (m, p) => {
-        const enc = p.endsWith('|enc');                       // {title|enc}: made safe to put in a web address
-        const v = this.pick(ctx, enc ? p.slice(0, -4) : p);
-        if (v == null || v === '') missing = true;
-        const t = Array.isArray(v) ? v.join(', ') : String(v == null ? '' : v);
-        return enc ? encodeURIComponent(t) : t;
+        // filters after the path: {title|enc} is made safe for a web address; {ia|or} joins a list as "a OR b OR c"
+        const [path, ...filters] = p.split('|');
+        const v = this.pick(ctx, path);
+        if (v == null || v === '' || (Array.isArray(v) && !v.length)) missing = true;
+        let t = Array.isArray(v) ? (filters.includes('or') ? v.slice(0, 25).join(' OR ') : v.join(', ')) : String(v == null ? '' : v);
+        if (filters.includes('enc')) t = encodeURIComponent(t);
+        return t;
       });
       return missing ? '' : s;
     }
@@ -324,7 +326,18 @@ const Sources = {
     const c = this.ctx[p.get('c')];
     if (!c) throw new Error('Open the book again');
     const d = def.detail;
-    const r = await this.fetch(def, this.val({ tpl: d.url }, Object.assign({}, c.it)));
+    const it = Object.assign({}, c.it);
+    // "pick": one more question first, to choose which copy to open (e.g. the most read copy that is free to download)
+    if (d.pick && d.pick.url && d.pick.value && d.pick.as) {
+      const pr = await this.fetch(def, this.val({ tpl: d.pick.url }, it));
+      let pb;
+      try { pb = JSON.parse(pr.body); } catch (e) { throw new Error('The site did not answer with data Kitab can read'); }
+      const v = this.pick(pb, d.pick.value);
+      const first = Array.isArray(v) ? v[0] : v;
+      if (first == null || first === '') throw new Error(String(d.pick.none || 'No free copy of this book can be downloaded').slice(0, 120));
+      it[d.pick.as] = [first];
+    }
+    const r = await this.fetch(def, this.val({ tpl: d.url }, it));
     let body;
     try { body = JSON.parse(r.body); } catch (e) { throw new Error('The site did not answer with data Kitab can read'); }
     const out = { summary: this.plain(this.pick(body, d.summary)), formats: [] };
@@ -333,7 +346,7 @@ const Sources = {
       for (const f of Array.isArray(files) ? files : []) {
         const kind = pick.as && pick.as[f[pick.field || 'format']];
         if (!kind) continue;
-        const url = this.val(pick.url, Object.assign({}, c.it, f));
+        const url = this.val(pick.url, Object.assign({}, it, f));
         out.formats.push({ format: kind, url, size: Number(f.size) || 0, score: kind === 'EPUB' ? 2 : 1 });
       }
       // EPUB first; of several PDFs keep the smallest (the text one, not the heavy picture-only one)
