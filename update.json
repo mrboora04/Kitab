@@ -1,7 +1,7 @@
 {
   "versionCode": 29,
   "versionName": "1.18",
-  "notes": "Sources now come from kitab-sources, which checks every source against the real sites each day; a source that is not working says so",
+  "notes": "The store lives in kitab-sources, with its daily check",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "514fea901e180f77b5d828185a14188f31040a60363716f6ae8675e3c4c96f7c"
+  "sha256": "cb7b36fb78236ee83983e2eab7dccffea46297b61000a7a5a987e14775c24c9a"
 }
