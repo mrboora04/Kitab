@@ -657,9 +657,8 @@ body:not(.funky) .toast { background: color-mix(in srgb, var(--fg) 88%, #000); c
 .search-prompt p { margin: 0; font-size: 15px; }
 
 /* ---------- Browse lists: sections are rows, books are covers ---------- */
-#feedList { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 14px; align-items: start; padding-top: 6px; }
-#feedList > .li.nav, #feedList > p, #feedList > .search-prompt { grid-column: 1 / -1; }
-#feedList > .li.nav { margin: -11px 0; padding: 12px 2px; }
+#feedList { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 22px 14px; align-items: start; padding-top: 6px; }
+#feedList > p, #feedList > .search-prompt { grid-column: 1 / -1; }
 .sec-dot { width: 38px; height: 38px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 700 17px Georgia, serif; color: hsl(var(--h) 45% 32%); background: hsl(var(--h) 55% 88%); }
 body[data-theme="dusk"] .sec-dot, body[data-theme="night"] .sec-dot { color: hsl(var(--h) 60% 80%); background: hsl(var(--h) 30% 22%); }
 .li.gbook { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 0; border: 0; min-width: 0; text-align: left; transition: transform .2s var(--ease), opacity .2s; }
@@ -674,3 +673,36 @@ body[data-theme="dusk"] .sec-dot, body[data-theme="night"] .sec-dot { color: hsl
 .langbar { padding: 0 0 12px; }
 .langbar .chip { padding: 6px 13px; font-size: 13.5px; }
 #feedList .li.gbook, body:not(.funky) #feedList .li.gbook { border: 0; }
+
+/* Sections are tiles, two across; books are covers, three across */
+#feedList > .li.gbook { grid-column: span 2; }
+#feedList > .li.nav.tile { grid-column: span 3; position: relative; overflow: hidden; display: flex; align-items: flex-end; aspect-ratio: 1.55; margin: 0; padding: 12px 13px; border: 0; border-radius: 14px; text-align: left; color: #fff;
+  background: linear-gradient(140deg, hsl(var(--h) 42% 47%), hsl(var(--h) 48% 27%)); box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 18px rgba(0,0,0,.10); transition: transform .2s var(--ease), opacity .2s; }
+#feedList > .li.nav.tile:active { transform: scale(.97); opacity: .9; }
+.li.nav.tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.li.nav.tile img + .tile-text { background: linear-gradient(transparent, rgba(0,0,0,.55) 45%); margin: -12px -13px; padding: 26px 13px 12px; }
+.tile-text { position: relative; display: flex; flex-direction: column; gap: 3px; min-width: 0; width: 100%; }
+.tile-text b { font: 700 15.5px/1.22 -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif; letter-spacing: -.2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.tile-text small { font-size: 12px; line-height: 1.3; opacity: .88; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+body[data-theme="dusk"] #feedList > .li.nav.tile, body[data-theme="night"] #feedList > .li.nav.tile { background: linear-gradient(140deg, hsl(var(--h) 32% 32%), hsl(var(--h) 38% 18%)); }
+
+/* Books in a source: covers three across, the title printed over the bottom (like a manga reader's grid) */
+#feedList > .li.gbook .cover { margin: 0; border-radius: 8px; }
+.li.gbook .cover .gen { justify-content: flex-start; gap: 6px; }
+.li.gbook .cover .gen .by { font: 500 11px/1.25 system-ui, sans-serif; opacity: .75; }
+.li.gbook .cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 30px 8px 7px; background: linear-gradient(transparent, rgba(0,0,0,.42) 35%, rgba(0,0,0,.8)); }
+.li.gbook .cap b { color: #fff; font: 600 12.5px/1.25 system-ui, -apple-system, Roboto, sans-serif; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.li.gbook .badge { position: absolute; top: 6px; left: 6px; z-index: 2; max-width: calc(100% - 12px); font-style: normal; font-size: 10px; font-weight: 700; line-height: 1; padding: 4px 6px; border-radius: 4px; background: var(--accent); color: var(--accent-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li.gbook .badge.have { background: #3c7a48; color: #fff; }
+#feedList { gap: 12px 10px; }
+#feedTabs { margin: 0 -16px; padding: 0 16px 12px; }
+#feedTabs .chip { padding: 7px 14px; font-weight: 600; }
+
+/* The Update bar at the top of the library */
+.update-bar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.update-bar .upd-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.update-bar b { font-size: 14.5px; }
+.update-bar small { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.update-bar .btn { flex: none; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; }
+#feedList > .li.gbook .cover img { background: transparent; }

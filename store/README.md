@@ -18,9 +18,9 @@ Then tap the download arrow next to a source. It shows up under **Browse → Sou
 |---|---|---|
 | Free Scanned Books | archive.org | Scanned books anyone can read free on the Internet Archive (no lending-library items), in any language |
 | Open Library (free scans) | openlibrary.org, archive.org | Free scans anyone can borrow or download, EPUB and PDF |
-| Wikisource | en.wikisource.org | Free texts, exported as EPUB |
+| Wikisource | en.wikisource.org | Free texts (novels, short stories, poems, plays), exported as EPUB |
 
-Project Gutenberg is built into Kitab itself, so it is not repeated here.
+Project Gutenberg (through Gutendex) is built into Kitab itself, so it is not repeated here.
 
 ## Why it is safe
 

@@ -207,7 +207,7 @@ const App = {
     const chip = ([t, a]) => `<button class="idea" data-q="${esc(t)}"><b>${esc(t)}</b><small>${esc(a)}</small></button>`;
     $('#suggestTrack').innerHTML = '<span class="idea-lead">Try a classic →</span>' + ideas.map(chip).join('') + ideas.map(chip).join('');   // twice, for a seamless loop
     $$('#suggestTrack .idea').forEach((b) => {
-      b.onclick = () => { this.showTab('browse'); Browse.searchIn('gutenberg', b.dataset.q); };
+      b.onclick = () => { this.showTab('browse'); Browse.searchIn('ext:gutenberg', b.dataset.q); };
     });
   },
 
@@ -1155,4 +1155,70 @@ const EyeCare = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { App.init(); EyeCare.start(); });
+document.addEventListener('DOMContentLoaded', () => { App.init(); EyeCare.start(); Updater.init(); });
+
+/* Updates: a small file on GitHub says which Kitab is newest. When it is newer than this one, an Update
+   button appears; tapping it downloads the new app, checks it, and Android asks "Install this update?". */
+const Updater = {
+  FEED: 'https://raw.githubusercontent.com/mrboora04/Kitab/main/update.json',
+  EVERY: 6 * 3600e3,
+  info: store.get('er.update', null),
+  busy: false,
+
+  current() { try { return Number(window.Android && Android.appVersion && Android.appVersion()) || 0; } catch (e) { return 0; } },
+
+  init() {
+    const b = $('#checkUpdate');
+    if (b) b.onclick = () => this.check(true);
+    App.onUpdate = (pct) => this.progress(pct);
+    App.onUpdateDone = (err) => this.done(err);
+    this.show();
+    if (Date.now() - store.get('er.updateAt', 0) > this.EVERY) setTimeout(() => this.check(false), 4000);
+  },
+
+  newer() { return !!(this.info && Number(this.info.versionCode) > this.current() && this.current() > 0); },
+
+  async check(byHand) {
+    if (!this.current()) { if (byHand) App.toast('Updates work in the Kitab app on your phone'); return; }
+    if (byHand) App.toast('Checking…', 1200);
+    try {
+      const r = await Opds.fetchText(this.FEED + '?t=' + Date.now());
+      const d = JSON.parse(r.body);
+      store.set('er.updateAt', Date.now());
+      const ok = d && Number(d.versionCode) > 0 && /^https:\/\/(raw\.githubusercontent\.com|github\.com)\/mrboora04\/Kitab\//.test(d.apk || '');
+      this.info = ok ? d : null;
+      store.set('er.update', this.info);
+      this.show();
+      if (byHand) App.toast(this.newer() ? `Kitab ${d.versionName} is ready to install` : 'Kitab is up to date');
+    } catch (e) {
+      if (byHand) App.toast('Could not check for updates. Check your internet connection.', 3500);
+    }
+  },
+
+  show() {
+    const bar = $('#updateBar');
+    if (!bar) return;
+    bar.classList.toggle('hidden', !this.newer());
+    if (!this.newer()) return;
+    const d = this.info;
+    bar.innerHTML = `<div class="upd-text"><b>Kitab ${esc(d.versionName || '')} is ready</b>${d.notes ? `<small>${esc(String(d.notes).slice(0, 160))}</small>` : ''}</div>
+      <button class="btn primary" id="updateGo">${this.busy ? 'Downloading…' : 'Update'}</button>`;
+    $('#updateGo').onclick = () => this.go();
+  },
+
+  go() {
+    if (this.busy || !this.newer()) return;
+    if (!(window.Android && Android.installUpdate)) return App.toast('Updates work in the Kitab app on your phone');
+    this.busy = true;
+    this.show();
+    Android.installUpdate(this.info.apk, this.info.sha256 || '');
+  },
+
+  progress(pct) { const b = $('#updateGo'); if (b) b.textContent = `Downloading ${pct}%`; },
+
+  done(err) {
+    this.busy = false;
+    this.show();
+    if (err) App.toast(err, 4500);
+  },
+};

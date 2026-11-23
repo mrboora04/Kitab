@@ -1,8 +1,10 @@
 package com.kitab.app;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageInstaller;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
@@ -32,6 +34,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -133,14 +136,39 @@ public class MainActivity extends Activity {
         web.loadUrl(ORIGIN + "/index.html");
     }
 
+    static final String ACTION_INSTALLED = "com.kitab.app.UPDATE_STATUS";
+
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (intent != null && ACTION_INSTALLED.equals(intent.getAction())) { onInstallStatus(intent); return; }
         handleIntent(intent);
         if (pendingOpen != null) {
             js("window.App && App.openBook(" + JSONObject.quote(pendingOpen) + ")");
             pendingOpen = null;
         }
+    }
+
+    /** Android's installer reports back: ask the user to confirm, or tell the page why it did not work. */
+    void onInstallStatus(Intent intent) {
+        int st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999);
+        if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            if (confirm != null) {
+                try { startActivity(confirm); return; } catch (Exception e) { /* reported below */ }
+            }
+        }
+        if (st == PackageInstaller.STATUS_SUCCESS) return;
+        String why;
+        if (st == PackageInstaller.STATUS_FAILURE_ABORTED) why = "Update cancelled";
+        else if (st == PackageInstaller.STATUS_FAILURE_CONFLICT || st == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE)
+            why = "This update cannot replace the Kitab on your phone (it was signed with a different key)";
+        else if (st == PackageInstaller.STATUS_FAILURE_STORAGE) why = "Not enough space on the phone for the update";
+        else {
+            String m = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+            why = "The update did not install" + (m != null && m.length() > 0 ? " (" + m + ")" : "");
+        }
+        js("window.App && App.onUpdateDone(" + JSONObject.quote(why) + ")");
     }
 
     /** "Open with Kitab" from a file manager or browser download. */
@@ -297,6 +325,18 @@ public class MainActivity extends Activity {
         scanDir(book).delete();
     }
 
+    static String sha256Of(File f) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new FileInputStream(f)) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format("%02x", b));
+        return sb.toString();
+    }
+
     void js(String code) {
         if (web != null) web.evaluateJavascript(code, null);
     }
@@ -412,6 +452,64 @@ public class MainActivity extends Activity {
                 }
                 final String json = out.toString();
                 runOnUiThread(new Runnable() { public void run() { js("window.App && App.onHttp(" + json + ")"); }});
+            }}).start();
+        }
+
+        /** This app's version number (versionCode), so the page can tell whether an update is newer. */
+        @JavascriptInterface
+        public int appVersion() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
+        }
+
+        /** Downloads a newer Kitab, checks it, and opens Android's own "Install this update?" screen.
+         *  Progress: App.onUpdate(percent); a problem: App.onUpdateDone(message). */
+        @JavascriptInterface
+        public void installUpdate(final String url, final String sha256) {
+            new Thread(new Runnable() { public void run() {
+                String error = null;
+                File apk = new File(getCacheDir(), "kitab-update.apk");
+                try {
+                    if (!url.startsWith("https://")) throw new Exception("The update address is not safe");
+                    final long[] last = {0};
+                    Http.download(url, apk, 200L << 20, new Http.Progress() {
+                        public void onProgress(long done, long total) {
+                            long now = System.currentTimeMillis();
+                            if (total > 0 && now - last[0] > 250) {
+                                last[0] = now;
+                                final int pct = (int) (done * 100 / total);
+                                runOnUiThread(new Runnable() { public void run() { js("window.App && App.onUpdate(" + pct + ")"); }});
+                            }
+                        }
+                    }, null);
+                    if (sha256 != null && sha256.length() > 0 && !sha256.equalsIgnoreCase(sha256Of(apk)))
+                        throw new Exception("The download was damaged. Try again");
+                    PackageInstaller installer = getPackageManager().getPackageInstaller();
+                    PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                    params.setAppPackageName(getPackageName());
+                    int sid = installer.createSession(params);
+                    PackageInstaller.Session session = installer.openSession(sid);
+                    try {
+                        try (OutputStream out = session.openWrite("kitab.apk", 0, apk.length()); InputStream in = new FileInputStream(apk)) {
+                            byte[] buf = new byte[65536];
+                            int n;
+                            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                            session.fsync(out);
+                        }
+                        Intent back = new Intent(MainActivity.this, MainActivity.class).setAction(ACTION_INSTALLED);
+                        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? 0x02000000 /* FLAG_MUTABLE */ : 0);
+                        session.commit(PendingIntent.getActivity(MainActivity.this, sid, back, flags).getIntentSender());
+                    } finally {
+                        session.close();
+                    }
+                } catch (Exception e) {
+                    error = String.valueOf(e.getMessage());
+                } finally {
+                    apk.delete();
+                }
+                final String err = error;
+                runOnUiThread(new Runnable() { public void run() {
+                    js("window.App && App.onUpdateDone(" + (err == null ? "null" : JSONObject.quote(err)) + ")");
+                }});
             }}).start();
         }
 

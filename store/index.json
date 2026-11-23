@@ -28,9 +28,9 @@
       "id": "wikisource",
       "name": "Wikisource",
       "lang": "en",
-      "version": 1,
+      "version": 2,
       "file": "sources/wikisource.json",
-      "sha256": "77fcce346b887f8d5ea3d9a1a4b4ffb0924cfe39a1127a57a5b3d2c0eaba77cc",
+      "sha256": "cf4c27d47068e559138329dac4ff7b857de54303502cf32e4a59d740aabfa7a2",
       "site": "https://en.wikisource.org",
       "icon": "📜",
       "license": "Public domain and freely licensed texts"

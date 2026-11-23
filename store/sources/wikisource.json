@@ -2,23 +2,57 @@
   "schema": 1,
   "id": "wikisource",
   "name": "Wikisource",
-  "version": 1,
+  "version": 2,
   "lang": "en",
   "license": "Public domain and freely licensed texts",
   "site": "https://en.wikisource.org",
   "icon": "📜",
-  "hosts": ["en.wikisource.org", "ws-export.wmcloud.org"],
+  "hosts": [
+    "en.wikisource.org",
+    "ws-export.wmcloud.org"
+  ],
   "type": "json",
   "search": {
-    "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srsearch={q}&srnamespace=0&srlimit=30&format=json&formatversion=2",
+    "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=24&sroffset={offset}&srprop=snippet&format=json&formatversion=2&srsearch={q}%20-hastemplate%3AVersions%20-hastemplate%3ATranslations%20-hastemplate%3ADisambiguation",
     "list": "query.search",
+    "pager": {
+      "total": "query.searchinfo.totalhits",
+      "per": 24
+    },
     "map": {
       "id": "pageid",
       "title": "title",
       "summary": "snippet",
       "formats": [
-        { "format": "EPUB", "url": { "tpl": "https://ws-export.wmcloud.org/?format=epub&lang=en&page={title|enc}" } }
+        {
+          "format": "EPUB",
+          "url": {
+            "tpl": "https://ws-export.wmcloud.org/?format=epub&lang=en&page={title|enc}"
+          }
+        }
       ]
     }
-  }
+  },
+  "browse": [
+    {
+      "key": "novels",
+      "label": "Novels",
+      "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=24&sroffset={offset}&srprop=snippet&format=json&formatversion=2&srsearch=incategory%3ANovels%20-hastemplate%3AVersions%20-hastemplate%3ATranslations%20-hastemplate%3ADisambiguation"
+    },
+    {
+      "key": "stories",
+      "label": "Short stories",
+      "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=24&sroffset={offset}&srprop=snippet&format=json&formatversion=2&srsearch=incategory%3A%22Short%20stories%22%20-hastemplate%3AVersions%20-hastemplate%3ATranslations%20-hastemplate%3ADisambiguation"
+    },
+    {
+      "key": "poems",
+      "label": "Poems",
+      "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=24&sroffset={offset}&srprop=snippet&format=json&formatversion=2&srsearch=incategory%3APoems%20-hastemplate%3AVersions%20-hastemplate%3ATranslations%20-hastemplate%3ADisambiguation"
+    },
+    {
+      "key": "plays",
+      "label": "Plays",
+      "url": "https://en.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=24&sroffset={offset}&srprop=snippet&format=json&formatversion=2&srsearch=incategory%3APlays%20-hastemplate%3AVersions%20-hastemplate%3ATranslations%20-hastemplate%3ADisambiguation"
+    }
+  ]
 }

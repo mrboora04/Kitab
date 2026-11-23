@@ -27,6 +27,8 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 2. Open the downloaded file **Kitab.apk**.
 3. If Android asks, allow **Install unknown apps** for your browser, then tap **Install**.
 
+**Updates come to you.** From version 1.16, when a newer Kitab is out an **Update** bar appears at the top of your library. Tap it, then tap **Install** when Android asks (the first time, allow Kitab to install apps). Your books and reading progress stay. You can also check by hand at the bottom of **More**.
+
 <p align="center">
   <img src="docs/screens/library.png" width="19%" alt="Library">
   <img src="docs/screens/browse.png" width="19%" alt="Browse free books">
@@ -40,7 +42,7 @@ EPUB · PDF · TXT · free public-domain library · scan old books into readable
 ## How to use Kitab
 
 **1. Find a book.**
-Tap **Browse**, pick a source, or search all of them at once. Pick a language under the search box to see books in that language only. Tap a cover, tap Download, and read it in Kitab. Kitab only shows books anyone can read: nothing that needs a login.
+Tap **Browse**, pick a source, or search all of them at once. A source opens straight onto its books, with its lists (Popular, Latest, Fiction...) as chips along the top. Pick a language under the search box to see books in that language only. Tap a cover, tap Download, and read it in Kitab. Kitab only shows books anyone can read: nothing that needs a login.
 
 **Want more places to find books?** On the Browse screen, tap **Add sources**: tap the arrow next to a source (Free Scanned Books, Open Library, Wikisource, ...) or the starter pack, and it appears under **Your sources**. Sources are small, checked recipes, not programs: they only reach the websites they list, and only offer free, public books. Kitab hosts and stores no books, and never sends you out to a website: everything is read inside the app. See [`store/`](store/README.md) to make your own list.
 
@@ -99,6 +101,10 @@ Pillow, `zip`, and two jars from Maven Central (the script downloads and checksu
 The signing key is generated on first build in `.tools/` and is not committed. Builds made with a
 different key can't install over an existing copy, so to update the app you'd need to uninstall it
 first (your reading progress is lost when you do). Set `KEYSTORE`/`STOREPASS` to keep one key across builds.
+
+**Publishing an update:** raise `versionCode`/`versionName` in `AndroidManifest.xml`, build, commit `dist/Kitab.apk`, then write
+[`update.json`](update.json) with the new version, a line of notes and the APK's SHA-256. Installed copies read that file
+(every 6 hours, or when you tap *Check for updates*), download the APK, check its SHA-256, and hand it to Android's installer.
 
 To work on the UI in a desktop browser, serve `assets/` with a `books/` folder next to `index.html`
 (e.g. `python3 -m http.server`). Native-only features are stubbed out.

@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.kitab.app"
-    android:versionCode="26"
-    android:versionName="1.15">
+    android:versionCode="27"
+    android:versionName="1.16">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="29" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- only to install a newer Kitab when you tap Update -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="Kitab"

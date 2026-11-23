@@ -16,6 +16,8 @@ const OFFICIAL_REPO = 'https://raw.githubusercontent.com/mrboora04/Kitab/main/st
 const Sources = {
   repos: store.get('er.repos', null) || [{ url: OFFICIAL_REPO, name: 'Kitab Official' }],
   installed: store.get('er.ext', {}),      // id -> { def, repo, at }
+  // Sources that come with Kitab itself (not from the store, cannot be removed)
+  builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 1, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": "formats.image/jpeg", "formats": [{"format": "EPUB", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science"}]} },
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
 
@@ -102,9 +104,14 @@ const Sources = {
 
   list() { return Object.values(this.installed).map((x) => x.def).sort((a, b) => a.name.localeCompare(b.name)); },
 
+  /** Every source Browse shows: the built-in ones first, then the installed ones. */
+  catalogs() { return Object.values(this.builtin).concat(this.list()).map((d) => this.asCatalog(d)); },
+
+  def(id) { return (this.installed[id] && this.installed[id].def) || this.builtin[id] || null; },
+
   /** A source as a Browse "catalog": the root page is an ext: address that Sources.load answers. */
   asCatalog(def) {
-    const cat = { id: 'ext:' + def.id, name: def.name, blurb: [def.lang === 'multi' ? 'Multi' : (def.lang || '').toUpperCase(), def.license].filter(Boolean).join(' · '), icon: def.icon || '🧩', def, ext: true };
+    const cat = { id: 'ext:' + def.id, name: def.name, blurb: def.blurb || [def.lang === 'multi' ? 'Multi' : (def.lang || '').toUpperCase(), def.license].filter(Boolean).join(' · '), icon: def.icon || '🧩', def, ext: true };
     if (def.type === 'opds') {
       cat.url = def.start;
       if (def.search) cat.search = def.search;
@@ -196,9 +203,9 @@ const Sources = {
 
   async load(url) {
     const m = /^ext:([a-z0-9-]+)\?(.*)$/.exec(url);
-    const inst = m && this.installed[m[1]];
-    if (!inst) throw new Error('That source is not installed');
-    const def = inst.def, p = new URLSearchParams(m[2]), op = p.get('op');
+    const def = m && this.def(m[1]);
+    if (!def) throw new Error('That source is not installed');
+    const p = new URLSearchParams(m[2]), op = p.get('op');
     if (def.type === 'json') return this.loadJson(def, op, p);
     if (def.type === 'html') return this.loadHtml(def, op, p);
     throw new Error('Open this source from its own page');
@@ -206,7 +213,7 @@ const Sources = {
 
   root(def) {
     const entries = (def.browse || []).map((b) => ({ title: b.label || 'Browse', summary: b.about || '', nav: `ext:${def.id}?op=browse&k=${encodeURIComponent(b.key)}&page=1`, authors: [] }));
-    return { title: def.name, entries, next: null, search: { href: '', type: '' } };
+    return { title: def.name, entries, tabs: entries.map((e) => ({ label: e.title, url: e.nav })), next: null, search: { href: '', type: '' } };
   },
 
   /** Which request a page needs: the address to fetch and which "map" reads it. */
@@ -218,12 +225,14 @@ const Sources = {
       // {lang} in the address becomes the source's own way of asking for one language, or nothing for all
       const code = p.get('lang') || '', lf = def.langFilter;
       const lang = lf && lf.values && lf.values[code] ? String(lf.param || '{v}').replace('{v}', lf.values[code]) : '';
-      return { url: this.fill(s.url, { q: encodeURIComponent(p.get('q') || ''), page, lang }), m: s, op, page, q: p.get('q') || '', lang: code };
+      const per = (s.pager && Number(s.pager.per)) || 24;
+      return { url: this.fill(s.url, { q: encodeURIComponent(p.get('q') || ''), page, offset: (page - 1) * per, lang }), m: s, op, page, q: p.get('q') || '', lang: code };
     }
     if (op === 'browse') {
       const b = (def.browse || []).find((x) => x.key === p.get('k'));
       if (!b) throw new Error('That list does not exist');
-      return { url: this.fill(b.url, { page, lang: '' }), m: b.map ? b : Object.assign({}, def.search || {}, b), op, page, k: b.key };
+      const m = b.map ? b : Object.assign({}, def.search || {}, b), per = (m.pager && Number(m.pager.per)) || 24;
+      return { url: this.fill(b.url, { page, offset: (page - 1) * per, lang: '' }), m, op, page, k: b.key };
     }
     if (op === 'page') {
       const u = p.get('u');

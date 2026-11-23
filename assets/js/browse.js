@@ -2,13 +2,6 @@
 /* Browse tab: free public-domain catalogs and your own OPDS catalogs (Calibre, Calibre-Web, Kavita, ...). */
 
 const Browse = {
-  builtin: [
-    {
-      id: 'gutenberg', lang: 'en', name: 'Project Gutenberg', blurb: 'Over 70,000 free classics, public domain', icon: '📚',
-      url: 'https://www.gutenberg.org/ebooks.opds/',
-      search: 'https://www.gutenberg.org/ebooks/search.opds/?query={searchTerms}',
-    },
-  ],
   custom: store.get('er.sources', []),
   stack: [],          // opened feeds, newest last: { source, url, feed, title, scroll }
   downloads: {},      // id -> { entry, pct }
@@ -51,8 +44,7 @@ const Browse = {
         <span class="src-text"><b>${esc(s.name)}</b><small>${esc(s.blurb || s.url)}</small></span>
         ${custom ? `<span class="src-del" data-del="${esc(s.id)}" aria-label="Remove catalog">✕</span>` : '<span class="chev">›</span>'}
       </button>`;
-    const exts = Sources.list().map((d) => Sources.asCatalog(d));
-    $('#sourceList').innerHTML = this.builtin.map((s) => card(s)).join('') + exts.map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
+    $('#sourceList').innerHTML = Sources.catalogs().map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
     $$('#sourceList [data-src]').forEach((b) => {
       b.onclick = (e) => {
         if (e.target.dataset.del) return;
@@ -101,7 +93,7 @@ const Browse = {
     $('#pane-browse').scrollTop = 0;
   },
 
-  all() { return this.builtin.concat(Sources.list().map((d) => Sources.asCatalog(d)), this.custom); },
+  all() { return Sources.catalogs().concat(this.custom); },
 
   /** One place that reads a feed: built-in and your own catalogs (OPDS), or an installed source (ext: addresses). */
   async loadFeed(url, src) {
@@ -155,11 +147,19 @@ const Browse = {
       $('#feedSearch').classList.add('hidden');
       $('#feedLangs').classList.add('hidden');
       $('#feedMore').classList.add('hidden');
+      $('#feedTabs').classList.add('hidden');
     }
     this.status('loading');
     try {
       const feed = await this.loadFeed(url, src);
-      this.stack.push({ source: src, url, feed, title: title || feed.title, scroll: 0 });
+      const view = { source: src, url, feed, title: title || feed.title, scroll: 0 };
+      const tabs = this.stack.length ? null : this.tabsOf(feed);
+      if (tabs) {          // like a manga reader: the source's lists along the top, the first list's books straight away
+        const first = await this.loadFeed(tabs[0].url, src);
+        if (!first.search || !first.search.href) first.search = feed.search;
+        Object.assign(view, { url: tabs[0].url, feed: first, title: title || src.name, tabs, tab: 0 });
+      }
+      this.stack.push(view);
       this.renderFeed();
     } catch (e) {
       if (e.needsLogin || e.status === 401 || e.status === 403) e = new Error('This library needs a login. Kitab only uses libraries that anyone can read without one.');
@@ -170,6 +170,44 @@ const Browse = {
         $('#feedMore').classList.add('hidden');
       }
       this.status('error', e.message, () => this.open(src, url, title));
+    }
+  },
+
+  /** The lists a source opens on: a recipe's own lists, or a catalog whose first page is only a few sections. */
+  tabsOf(feed) {
+    if (feed.tabs && feed.tabs.length) return feed.tabs;
+    const e = feed.entries || [];
+    if (e.length < 2 || e.length > 12 || !e.every((x) => x.nav)) return null;
+    this.shortenSections(e);
+    return e.map((x) => ({ label: x._short || x.title, url: x.nav }));
+  },
+
+  drawTabs(view) {
+    const bar = $('#feedTabs');
+    bar.classList.toggle('hidden', !view.tabs);
+    if (!view.tabs) return;
+    bar.innerHTML = view.tabs.map((t, i) => `<button class="chip${i === view.tab ? ' on' : ''}" data-tab="${i}">${esc(t.label)}</button>`).join('');
+    $$('#feedTabs [data-tab]').forEach((b) => { b.onclick = () => this.switchTab(Number(b.dataset.tab)); });
+    const on = bar.querySelector('.on');
+    if (on) bar.scrollLeft = Math.max(0, on.offsetLeft - 16);
+  },
+
+  async switchTab(i, again) {
+    const view = this.stack[this.stack.length - 1];
+    if (!view || !view.tabs || (i === view.tab && !again)) return;
+    view.tab = i;
+    this.drawTabs(view);
+    $('#feedList').innerHTML = '';
+    $('#feedMore').classList.add('hidden');
+    this.status('loading');
+    try {
+      const feed = await this.loadFeed(view.tabs[i].url, view.source);
+      if (this.stack[this.stack.length - 1] !== view || view.tab !== i) return;     // another chip was tapped meanwhile
+      if (!feed.search || !feed.search.href) feed.search = view.feed.search;
+      Object.assign(view, { feed, url: view.tabs[i].url, scroll: 0 });
+      this.renderFeed();
+    } catch (e) {
+      if (view.tab === i) this.status('error', e.message, () => this.switchTab(i, true));
     }
   },
 
@@ -203,6 +241,7 @@ const Browse = {
     $('#feedQuery').value = '';
     $('#feedQuery').placeholder = 'Search ' + (view.source.name || 'catalog');
     $('#feedLangs').classList.toggle('hidden', view.source.id !== 'all');
+    this.drawTabs(view);
     this.drawEntries(view, view.feed.entries, false);
     $('#feedList').parentElement.scrollTop = view.scroll || 0;
     if (/op=root/.test(view.url || '') && canSearch && !view.feed.entries.length) setTimeout(() => $('#feedQuery').focus(), 250);
@@ -212,22 +251,37 @@ const Browse = {
   tint(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; },
 
   rowHtml(e, idx) {
-    if (e.nav) {      // a section of the catalog: a plain row, not a folder
-      return `<button class="li nav" data-nav="${idx}"><span class="sec-dot" style="--h:${this.tint(e.title)}">${esc((e.title || '?').trim().slice(0, 1).toUpperCase())}</span><span class="row-text"><b>${esc(e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span><span class="chev">›</span></button>`;
+    if (e.nav) {      // a section of the catalog: a coloured tile (its own picture when it has one)
+      return `<button class="li nav tile" data-nav="${idx}" style="--h:${this.tint(e.title)}">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<span class="tile-text"><b>${esc(e._short || e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span></button>`;
     }
-    // a book: its cover (or a printed-looking one made from the title), then title, author and one small label
+    // a book: its cover (or a printed-looking one), the title over the bottom of it, and one small badge
     const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
-    const tag = this.have(e) ? '<em class="have">In library</em>' : (e._sourceName ? `<em>${esc(e._sourceName)}</em>` : (fmt ? `<em>${fmt}</em>` : ''));
+    const badge = this.have(e) ? '<em class="badge have">In library</em>' : (e._sourceName ? `<em class="badge">${esc(e._sourceName)}</em>` : '');
     const by = (e.authors || []).join(', ') || e.note || '';
-    return `<button class="li gbook" data-book="${idx}">
+    return `<button class="li gbook" data-book="${idx}" aria-label="${esc(e.title + (by ? ', ' + by : ''))}">
         <span class="cover" style="--c1:hsl(${this.tint(e.title)} 38% 42%);--c2:hsl(${this.tint(e.title)} 45% 24%)">
-          <span class="gen"><span class="type">${esc(fmt || 'BOOK')}</span><span>${esc(e.title.slice(0, 60))}</span><span></span></span>
-          ${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}</span>
-        <b>${esc(e.title)}</b>${by ? `<small>${esc(by)}</small>` : ''}<span class="tags">${tag}</span></button>`;
+          <span class="gen"><span class="type">${esc(fmt || 'BOOK')}</span><span class="by">${esc(by.slice(0, 40))}</span></span>
+          ${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}
+          <span class="cap"><b>${esc(e.title)}</b></span>${badge}</span></button>`;
+  },
+
+  /** Sections that all start with the same words ("Unglue.it Free eBooks", "Unglue.it Fiction"...) show without them. */
+  shortenSections(entries) {
+    const navs = entries.filter((e) => e.nav && e.title);
+    if (navs.length < 3) return;
+    const words = navs.map((e) => e.title.split(/\s+/));
+    let n = 0;
+    while (words.every((w) => w.length > n + 1 && w[n] === words[0][n])) n++;
+    if (!n) return;
+    navs.forEach((e, i) => {
+      const rest = words[i].slice(n).join(' ').replace(/^[:\-–—·|]+\s*/, '');
+      e._short = rest ? rest[0].toUpperCase() + rest.slice(1) : e.title;
+    });
   },
 
   drawEntries(view, entries, append) {
     const list = $('#feedList');
+    if (!append) this.shortenSections(entries);
     if (!append) { list.innerHTML = ''; view.all = []; view.drawn = 0; }
     const start = view.drawn;
     entries.forEach((e) => { if (!e._src) e._src = view.source; });

@@ -17,7 +17,7 @@ const Opds = (() => {
     if (s === 403) return 'The catalog refused the request (403). It may be for members only, or it may block apps.';
     if (s === 404) return 'That catalog page was not found (404). The address may have changed.';
     if (s === 429) return 'The catalog says too many requests (429). Wait a minute and try again.';
-    if (s >= 500) return `The catalog is having problems (${s}). Try again later.`;
+    if (s >= 500) return `This library is down or busy right now (${s}). Try again in a while.`;
     if (s) return `The catalog answered ${s}.`;
     const e = r.error || '';
     if (/resolve host|UnknownHost|connect|timed out|timeout|reset|Network/i.test(e) || !e) return 'Could not reach the catalog. Check your internet connection and try again.';
@@ -132,11 +132,14 @@ const Opds = (() => {
         || l.rel === 'http://opds-spec.org/featured' || (/atom\+xml/.test(l.type) && /kind=(navigation|acquisition)/.test(l.type)) || l.rel === 'start');
       // A listing without download links is a book only when it points at a single-book page
       // (Gutenberg lists books as plain "subsection" links); anything else is a folder.
-      const single = [detail, nav].filter(Boolean).find((l) => /\/ebooks\/\d+\.opds|\/entry\b|\/book\//.test(l.href) || (l === detail));
+      // An "alternate" link counts as a book page only for an entry with an author; a section has none.
+      const pointsToBook = (l) => /\/ebooks\/\d+\.opds|\/entry\b|\/book\//.test(l.href) || /entry/.test(l.type);
+      const single = [detail, nav].filter(Boolean).find((l) => pointsToBook(l) || (l === detail && authors.length));
       const bookLike = !!single;   // cover art alone does not make a book: folders often carry an icon
       const target = (detail || nav || {}).href;
       if (bookLike && target) { entry.detail = target; entry.maybeFolder = !detail; }
-      else if (nav) return { title, summary, nav: nav.href, authors };
+      else if (nav) return { title, summary, nav: nav.href, authors, cover: entry.cover };
+      else if (detail && !authors.length) return { title, summary, nav: detail.href, authors, cover: entry.cover };   // a section that links its list as "alternate"
       else if (detail) entry.detail = detail.href;
     }
     splitShort();
