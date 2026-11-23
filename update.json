@@ -1,7 +1,7 @@
 {
-  "versionCode": 29,
-  "versionName": "1.18",
-  "notes": "The store lives in kitab-sources, with its daily check",
+  "versionCode": 30,
+  "versionName": "1.19",
+  "notes": "Open Library picks a free copy of each book, and recipes can choose a copy first",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "cb7b36fb78236ee83983e2eab7dccffea46297b61000a7a5a987e14775c24c9a"
+  "sha256": "8554be409694ca9c2e7f13219d0f1702d8a1edb54aa8f82e5c99fd5b5288ddf0"
 }
