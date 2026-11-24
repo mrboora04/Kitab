@@ -8,6 +8,7 @@
  *   location()           { loc, progress, label, chapter } for the current position
  *   toc()                [{ label, level, loc }]
  *   visibleText()        text on screen, for read-aloud
+ *   search(q, hit, progress, alive)   find q in the whole book: hit({ loc, label, text, s, e, order }) per match
  *   apply(settings)      re-layout after a settings change
  *   destroy()
  * They call app.onRelocated() whenever the position changes and app.onTap(xFraction)
@@ -445,6 +446,40 @@ class TextReader {
 
   toc() { return this.src.toc; }
 
+  async search(q, hit, progress, alive) {
+    const n = this.src.count;
+    for (let i = 0; i < n && alive(); i++) {
+      if (this.src.ready && !this.src.ready(i)) { progress(i + 1, n); continue; }   // a scanned part with no text yet
+      let html = '';
+      try { html = await this.src.load(i); } catch (e) { html = ''; }
+      if (!alive()) return;
+      const d = inertDoc().createElement('div');
+      d.innerHTML = html || '';
+      const nodes = textNodesOf(d), text = nodes.map(([t]) => t.data).join('');
+      const found = findAllIn(text, q);
+      for (const [s, e] of found) {
+        let label;
+        if (this.src.pdf) {                                 // the page number from the page marks in the text
+          let page = i * this.src.perSection + 1;
+          for (const m of d.querySelectorAll('.pmark[id]')) {
+            const r = nodes.find(([t]) => m.contains(t));
+            if (r && r[1] <= s + 1) page = Number(m.id.slice(3));
+          }
+          label = `Page ${page}`;
+        } else label = this.src.count > 1 ? `Part ${i + 1}` : '';
+        hit({ loc: { s: i, c: s }, label, text, s, e, order: i * 1e9 + s, n: e - s });
+      }
+      progress(i + 1, n);
+      if (i % 4 === 3) await new Promise((r) => setTimeout(r));
+    }
+  }
+
+  /** After a jump from search: mark the words found. */
+  flash(h) {
+    if (h.loc.s !== this.s) return;
+    flashRange(rangeOver(this.textNodes(), h.loc.c, h.loc.c + (h.n || 1)));
+  }
+
   async visibleText() {
     const a = this.topRange(), b = this.bottomRange();
     if (a && b && a.compareBoundaryPoints(Range.START_TO_START, b) <= 0) {
@@ -539,6 +574,54 @@ class TextReader {
 }
 
 /* ---------- small text helpers shared by the readers ---------- */
+/* ---------------- searching a book ---------------- */
+/** A document that never loads images or runs anything: book HTML is parsed here to be searched. */
+function inertDoc() { return inertDoc.d || (inertDoc.d = document.implementation.createHTMLDocument('')); }
+
+/** Every place q occurs in text, ignoring capitals, accents and extra spaces: [[start, end], ...] in text. */
+function findAllIn(text, q) {
+  const fold = (ch) => ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const want = Array.from(String(q)).map(fold).join('').replace(/\s+/g, ' ').trim();
+  if (!want || !text) return [];
+  let f = '';
+  const at = [];                                   // at[k]: where folded character k came from in text
+  for (let i = 0; i < text.length;) {
+    const ch = String.fromCodePoint(text.codePointAt(i));
+    let x = fold(ch);
+    if (/^\s+$/.test(x)) { x = f.endsWith(' ') ? '' : ' '; }
+    for (let k = 0; k < x.length; k++) { f += x[k]; at.push(i); }
+    i += ch.length;
+  }
+  const out = [];
+  for (let k = f.indexOf(want); k !== -1 && out.length < 2000; k = f.indexOf(want, k + want.length)) {
+    const last = at[k + want.length - 1];
+    out.push([at[k], last + String.fromCodePoint(text.codePointAt(last)).length]);
+  }
+  return out;
+}
+
+/** A range over characters [s, e) of the text nodes `nodes` ([[node, position], ...]). */
+function rangeOver(nodes, s, e) {
+  const doc = nodes.length ? nodes[0][0].ownerDocument : document;
+  const r = doc.createRange();
+  let started = false;
+  for (const [n, pos] of nodes) {
+    if (!started && s >= pos && s <= pos + n.length) { r.setStart(n, s - pos); started = true; }
+    if (started && e > pos && e <= pos + n.length) { r.setEnd(n, e - pos); return r; }
+  }
+  return started ? r : null;
+}
+
+/** Marks a range for a moment (the words just found), where the browser can. */
+function flashRange(range) {
+  try {
+    if (!range || !window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return;
+    CSS.highlights.set('found', new Highlight(range));
+    clearTimeout(flashRange.t);
+    flashRange.t = setTimeout(() => CSS.highlights.delete('found'), 2600);
+  } catch (e) { /* not supported */ }
+}
+
 function textNodesOf(root) {
   const out = [];
   const w = (root.ownerDocument || document).createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -1304,6 +1387,25 @@ class PdfPageReader {
 
   toc() { return this.outline.map((t) => ({ label: t.label, level: t.level, loc: { page: t.loc.page } })); }
 
+  async search(q, hit, progress, alive) {
+    const total = this.pdf.numPages;
+    for (let n = 1; n <= total && alive(); n++) {
+      let text = '';
+      const saved = ScanStore.get(this.app.name, n);                 // a scanned page that already has its text
+      if (saved) { const d = inertDoc().createElement('div'); d.innerHTML = saved; text = d.textContent; }
+      else {
+        try {
+          const tc = await (await this.pdf.getPage(n)).getTextContent();
+          text = tc.items.map((it) => it.str + (it.hasEOL ? '\n' : '')).join(' ');
+        } catch (e) { text = ''; }
+      }
+      if (!alive()) return;
+      for (const [s, e] of findAllIn(text, q)) hit({ loc: { page: n }, label: `Page ${n}`, text, s, e, order: n * 1e7 + s });
+      progress(n, total);
+      if (n % 8 === 0) await new Promise((r) => setTimeout(r));
+    }
+  }
+
   async visibleText() {
     const page = await this.pdf.getPage(this.page);
     const html = await pdfPageHtml(page, this.page);
@@ -1534,6 +1636,45 @@ class EpubReader {
 
   toc() { return this.tocItems; }
 
+  /** The chapter name for a part of the book, from the table of contents. */
+  labelForHref(href, i) {
+    const base = (h) => String(h || '').split('#')[0].replace(/^.*\//, '');
+    const t = this.tocItems.find((x) => base(x.loc.href) === base(href));
+    return t ? t.label : `Section ${i + 1}`;
+  }
+
+  async search(q, hit, progress, alive) {
+    const items = this.book.spine.spineItems;
+    for (let i = 0; i < items.length && alive(); i++) {
+      const item = items[i];
+      try {
+        await item.load(this.book.load.bind(this.book));
+        const doc = item.document, body = doc && (doc.body || doc.documentElement);
+        if (body && alive()) {
+          const nodes = textNodesOf(body), text = nodes.map(([t]) => t.data).join('');
+          const found = findAllIn(text, q);
+          const label = found.length ? this.labelForHref(item.href, i) : '';
+          for (const [s, e] of found) {
+            const r = rangeOver(nodes, s, e);
+            let cfi = '';
+            try { cfi = r ? item.cfiFromRange(r) : ''; } catch (err) { cfi = ''; }
+            hit({ loc: cfi ? { cfi } : { href: item.href }, label, text, s, e, order: i * 1e9 + s });
+          }
+        }
+      } catch (e) { /* a part that cannot be read is skipped */ }
+      try { item.unload(); } catch (e) { /* already unloaded */ }
+      progress(i + 1, items.length);
+    }
+  }
+
+  flash(h) {
+    if (!h.loc.cfi || !this.rendition) return;
+    try {
+      this.rendition.annotations.highlight(h.loc.cfi, {}, null, 'er-found', { fill: '#ffd54a', 'fill-opacity': '0.55' });
+      setTimeout(() => { try { this.rendition.annotations.remove(h.loc.cfi, 'highlight'); } catch (e) { /* gone */ } }, 2600);
+    } catch (e) { /* not on screen */ }
+  }
+
   async visibleText() {
     const l = this.loc;
     if (!l) return '';
@@ -1688,6 +1829,7 @@ class ScanOnlineReader {
     if (this.cur !== box) return;
     box.querySelector('.so-text').innerHTML = list.map((w) =>
       `<span style="left:${(w.x * scale).toFixed(1)}px;top:${(w.y * scale).toFixed(1)}px;width:${(w.w * scale).toFixed(1)}px;height:${(w.h * scale).toFixed(1)}px;font-size:${(w.h * scale * 0.9).toFixed(1)}px">${esc(w.t)} </span>`).join('');
+    this.markFound(box);
   }
 
   async next() { if (this.n >= this.pages.length) return false; this.n++; this.show(); return true; }
@@ -1703,6 +1845,41 @@ class ScanOnlineReader {
 
   toc() { return []; }
   async visibleText() { return (await this.wordsOf(this.n)).map((w) => w.t).join(' '); }
+
+  /** Searches the library's OCR words, page by page (four pages at a time, in the background). */
+  async search(q, hit, progress, alive) {
+    const total = this.pages.length;
+    let next = 1, done = 0;
+    const worker = async () => {
+      while (alive() && next <= total) {
+        const n = next++;
+        const words = await this.wordsOf(n);
+        if (!alive()) return;
+        const text = words.map((w) => w.t).join(' ');
+        const p = this.pages[n - 1];
+        const printed = p.label && p.label !== String(n) && /^[\divxlcIVXLC]{1,8}$/.test(p.label) ? ` (p. ${p.label})` : '';
+        for (const [s, e] of findAllIn(text, q)) hit({ loc: { page: n }, label: `Page ${n}${printed}`, text, s, e, order: n * 1e7 + s });
+        progress(++done, total);
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  }
+
+  /** After a jump from search: mark the words found on the page. */
+  flash(h) { this._flash = h; if (this.cur && this.cur._n === h.loc.page) this.markFound(this.cur); }
+
+  markFound(box) {
+    const h = this._flash;
+    if (!h || box._n !== h.loc.page) return;
+    let pos = 0;
+    for (const sp of box.querySelectorAll('.so-text span')) {
+      const len = sp.textContent.length - 1;                  // each word span ends with a space
+      if (pos < h.e && pos + len > h.s) sp.classList.add('found');
+      pos += len + 1;
+    }
+    clearTimeout(this._ft);
+    this._ft = setTimeout(() => { box.querySelectorAll('.so-text .found').forEach((x) => x.classList.remove('found')); this._flash = null; }, 2600);
+  }
   clearSelection() { const s = window.getSelection(); if (s) s.removeAllRanges(); }
   apply() { this.relayout(); }
   relayout() { if (this.pages.length) this.show(); }

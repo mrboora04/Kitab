@@ -475,6 +475,8 @@ const App = {
     this.closePanels();
     if (this.reader) { try { this.reader.destroy(); } catch (e) { /* ignore */ } }
     this.reader = null;
+    this._findTok = null;                                  // a search of this book stops, and is forgotten
+    $('#findQuery').value = ''; $('#findList').innerHTML = ''; $('#findStatus').textContent = '';
     if (this.pdf) { this.pdf.destroy(); this.pdf = null; this.outline = null; }
     this.name = null;
     this.meta = null;
@@ -581,15 +583,14 @@ const App = {
     $('#prevBtn').onclick = () => this.turn(-1);
     $('#nextBtn').onclick = () => this.turn(1);
     $('#settingsBtn').onclick = () => this.openPanel('#settingsPanel');
-    $('#tocBtn').onclick = () => { this.renderToc(); this.openPanel('#tocPanel'); };
+    $('#tocBtn').onclick = () => { this.renderToc(); this.drawerTab('toc'); this.openPanel('#tocPanel'); };
+    $('#findBtn').onclick = () => this.openFind();
+    $('#findForm').onsubmit = (e) => { e.preventDefault(); $('#findQuery').blur(); this.find($('#findQuery').value, true); };
+    $('#findQuery').oninput = () => { clearTimeout(this._findT); this._findT = setTimeout(() => this.find($('#findQuery').value), 450); };
     $('#scrim').onclick = () => this.closePanels();
     $$('[data-close]').forEach((b) => { b.onclick = () => this.closePanels(); });
-    $$('.tab').forEach((t) => {
-      t.onclick = () => {
-        $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
-        $('#tocList').classList.toggle('hidden', t.dataset.tab !== 'toc');
-        $('#markList').classList.toggle('hidden', t.dataset.tab !== 'marks');
-      };
+    $$('#tocPanel .tab').forEach((t) => {
+      t.onclick = () => { this.drawerTab(t.dataset.tab); if (t.dataset.tab === 'find') setTimeout(() => $('#findQuery').focus(), 50); };
     });
     const p = $('#progress');
     p.oninput = () => { this._dragging = true; $('#progressLabel').textContent = (p.value / 10).toFixed(1) + '%'; };
@@ -635,6 +636,83 @@ const App = {
   closePanels() {
     $$('.drawer.open, .sheet.open').forEach((p) => p.classList.remove('open'));
     $('#scrim').classList.remove('on');
+  },
+
+  /** Contents, Highlights or Search, in the drawer. */
+  drawerTab(name) {
+    $$('#tocPanel .tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
+    $('#tocList').classList.toggle('hidden', name !== 'toc');
+    $('#markList').classList.toggle('hidden', name !== 'marks');
+    $('#findPane').classList.toggle('hidden', name !== 'find');
+  },
+
+  /* ---------------- searching the book ---------------- */
+  openFind() {
+    this.renderToc();
+    this.drawerTab('find');
+    this.openPanel('#tocPanel');
+    setTimeout(() => { const i = $('#findQuery'); i.focus(); i.select(); }, 280);
+  },
+
+  /** "… two words before the match and two after …", with the match marked. */
+  findSnippet(text, s, e) {
+    const before = text.slice(Math.max(0, s - 240), s), after = text.slice(e, e + 240);
+    const b = (before.match(/(?:\S+\s+){0,2}\S*$/) || [''])[0];
+    const a = (after.match(/^\S*(?:\s+\S+){0,2}/) || [''])[0];
+    const moreBefore = /\S/.test(text.slice(0, s - b.length)), moreAfter = /\S/.test(text.slice(e + a.length));
+    const tidy = (x) => esc(x.replace(/\s+/g, ' '));
+    return `${moreBefore ? '…' : ''}${tidy(b)}<mark>${tidy(text.slice(s, e))}</mark>${tidy(a)}${moreAfter && !/[.!?…]$/.test(a) ? '…' : ''}`;
+  },
+
+  async find(query, now) {
+    const q = String(query || '').trim();
+    const token = (this._findTok = {});
+    const list = $('#findList'), status = $('#findStatus');
+    if (q.length < 2 || !this.reader || !this.reader.search) {
+      list.innerHTML = '';
+      status.textContent = q.length === 1 ? 'Type at least two letters' : '';
+      return;
+    }
+    const hits = [], MAX = 500, alive = () => this._findTok === token && !!this.reader;
+    let drawn = 0, timer = null, pct = 0;
+    const draw = () => {
+      timer = null;
+      if (!alive()) return;
+      hits.sort((x, y) => x.order - y.order);
+      list.innerHTML = hits.map((h, i) => `<button class="find-hit" data-i="${i}">${h.label ? `<small>${esc(h.label)}</small>` : ''}<span>${this.findSnippet(h.text, h.s, h.e)}</span></button>`).join('');
+      $$('#findList [data-i]').forEach((b) => {
+        b.onclick = async () => {
+          const h = hits[b.dataset.i];
+          this.closePanels(); this.toggleUi(false);
+          await this.reader.goTo(h.loc);
+          if (this.reader.flash) setTimeout(() => this.reader && this.reader.flash(h), 120);
+          this.onRelocated();
+        };
+      });
+      drawn = hits.length;
+    };
+    const later = () => { if (!timer) timer = setTimeout(draw, drawn ? 400 : 60); };
+    list.innerHTML = '';
+    status.textContent = 'Searching…';
+    try {
+      await this.reader.search(q, (h) => {
+        if (hits.length >= MAX) return;
+        hits.push(h); later();
+      }, (done, total) => {
+        const p = Math.round((done / Math.max(1, total)) * 100);
+        if (p !== pct && alive()) { pct = p; status.textContent = `Searching… ${p}%${hits.length ? ` · ${hits.length} found` : ''}`; }
+      }, () => alive() && hits.length < MAX);
+    } catch (e) {
+      if (alive()) status.textContent = 'Search stopped: ' + (e.message || e);
+      return;
+    }
+    if (!alive()) return;
+    clearTimeout(timer); draw();
+    const m = this.meta || {};
+    const notAll = m.scanned && !m.scanComplete ? ' Scanned pages that are not yet text are not searched.' : '';
+    status.textContent = hits.length
+      ? `${hits.length >= MAX ? 'First ' + MAX : hits.length} result${hits.length === 1 ? '' : 's'} for “${q}”.${notAll}`
+      : `“${q}” is not in this book.${notAll}`;
   },
 
   renderToc() {
