@@ -22,6 +22,7 @@ const Sources = {
   builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 1, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": "formats.image/jpeg", "formats": [{"format": "EPUB", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science"}]} },
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
+  catalogs: {},                            // source id -> { data, at }: a catalog source's whole list, kept for a while
 
   saveRepos() { store.set('er.repos', this.repos); },
 
@@ -65,7 +66,8 @@ const Sources = {
     if (!str(d.license, 200)) return 'it does not say what kind of books it offers (license)';
     if (d.adult) return 'sources with adult content are not allowed';
     if (!Array.isArray(d.hosts) || !d.hosts.length || d.hosts.length > 6 || d.hosts.some((h) => !/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h))) return 'its list of websites is not valid';
-    if (!['json', 'html', 'opds'].includes(d.type)) return 'its type is unknown';
+    if (!['json', 'html', 'opds', 'catalog'].includes(d.type)) return 'its type is unknown';
+    if (d.type === 'catalog' && !/^https:\/\/\S+$/.test(d.catalog || '')) return 'its list of books (catalog) is missing';
     if (JSON.stringify(d).length > 20000) return 'it is too large';
     if (d.coverHosts && (!Array.isArray(d.coverHosts) || d.coverHosts.length > 4 || d.coverHosts.some((h) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h)))) return 'its list of picture websites is not valid';
     let bad = '';
@@ -148,7 +150,7 @@ const Sources = {
       if (def.search) cat.search = def.search;
     } else {
       cat.url = `ext:${def.id}?op=root`;
-      if ((def.search && def.search.url) || def.type === 'html') cat.search = `ext:${def.id}?op=search&q={searchTerms}`;
+      if ((def.search && def.search.url) || def.type === 'html' || def.type === 'catalog') cat.search = `ext:${def.id}?op=search&q={searchTerms}`;
     }
     return cat;
   },
@@ -241,6 +243,7 @@ const Sources = {
     const p = new URLSearchParams(m[2]), op = p.get('op');
     if (def.type === 'json') return this.loadJson(def, op, p);
     if (def.type === 'html') return this.loadHtml(def, op, p);
+    if (def.type === 'catalog') return this.loadCatalog(def, op, p);
     throw new Error('Open this source from its own page');
   },
 
@@ -281,6 +284,52 @@ const Sources = {
     if (req.op === 'search') return `ext:${def.id}?op=search&q=${encodeURIComponent(req.q)}&page=${req.page + 1}${req.lang ? '&lang=' + req.lang : ''}`;
     if (req.op === 'browse') return `ext:${def.id}?op=browse&k=${encodeURIComponent(req.k)}&page=${req.page + 1}`;
     return null;
+  },
+
+  /* --- catalog sources: the whole list of books is one file (built every day by the source list);
+         Kitab searches it and makes its lists on the phone --- */
+  async catalogData(def) {
+    const mem = this.catalogs[def.id];
+    if (mem && Date.now() - mem.at < 6 * 3600e3) return mem.data;
+    let data;
+    try {
+      data = JSON.parse((await this.fetch(def, def.catalog)).body);
+    } catch (e) {
+      if (mem) return mem.data;                     // keep using the list we have
+      throw e.status ? e : new Error('The list of books could not be read');
+    }
+    if (!data || !Array.isArray(data.books)) throw new Error('The list of books could not be read');
+    this.catalogs[def.id] = { data, at: Date.now() };
+    return data;
+  },
+
+  async loadCatalog(def, op, p) {
+    if (op === 'root') return this.root(def);
+    const data = await this.catalogData(def);
+    const page = Math.max(1, Number(p.get('page')) || 1), per = 24;
+    const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const is = (x, where) => Object.entries(where || {}).every(([k, v]) => (Array.isArray(v) ? v.includes(x[k]) : x[k] === v));
+    let list = data.books, base;
+    if (op === 'browse') {
+      const b = (def.browse || []).find((x) => x.key === p.get('k'));
+      if (!b) throw new Error('That list does not exist');
+      list = list.filter((x) => is(x, b.where));
+      if (b.sort) list = list.slice().sort((x, y) => (b.sort === 'title' ? String(x.title).localeCompare(String(y.title)) : (y[b.sort] || 0) - (x[b.sort] || 0)));
+      base = `ext:${def.id}?op=browse&k=${encodeURIComponent(b.key)}`;
+    } else if (op === 'search') {
+      const q = fold(p.get('q')).trim(), code = p.get('lang') || '';
+      const want = code && def.langFilter && def.langFilter.values ? def.langFilter.values[code] : '';
+      list = list.filter((x) => (!want || x.lang === want) && fold([x.title, (x.authors || []).join(' '), x.summary, x.language].join(' ')).includes(q));
+      base = `ext:${def.id}?op=search&q=${encodeURIComponent(p.get('q') || '')}${code ? '&lang=' + encodeURIComponent(code) : ''}`;
+    } else throw new Error('Unknown request');
+    const entries = list.slice((page - 1) * per, page * per).map((x) => ({
+      id: this.entryId(def, x.id), title: String(x.title || ''), authors: (x.authors || []).map(String),
+      summary: String(x.summary || ''), note: [x.language, x.levelName].filter(Boolean).join(' · '),
+      cover: this.coverOk(def, x.cover) ? x.cover : '',
+      formats: this.formats(def, Array.isArray(x.formats) ? x.formats : []),
+      read: x.read && this.hostOk(def, String(x.read)) ? String(x.read) : undefined,
+    })).filter((e) => e.title);
+    return { title: def.name, entries, next: page * per < list.length ? `${base}&page=${page + 1}` : null, search: { href: '', type: '' } };
   },
 
   /* --- JSON sources --- */
