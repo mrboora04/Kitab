@@ -743,10 +743,13 @@ body.is-online .keep-btn { display: inline-block; }
 .shelf-head h3 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.2px; }
 .shelf-head small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
 .see-all { flex: none; background: none; border: 0; padding: 4px 0; color: var(--accent); font: 600 14px/1 system-ui, sans-serif; }
-.shelf-row { display: flex; gap: 11px; overflow-x: auto; padding: 0 16px 4px; scroll-snap-type: x proximity; scroll-padding: 16px; scrollbar-width: none; }
+.shelf-row { display: flex; gap: 11px; overflow-x: auto; padding: 0 16px 4px; scrollbar-width: none; }
 .shelf-row::-webkit-scrollbar { display: none; }
-.shelf-row > .li.gbook { flex: 0 0 calc((100% - 22px) / 3.25); scroll-snap-align: start; border: 0; }
+.shelf-row > .li.gbook { flex: 0 0 calc((100% - 22px) / 2.4); border: 0; }
 .shelf-row > .li.gbook .cover { margin: 0; border-radius: 8px; }
 .shelf-row > .li.gbook .cover img { background: transparent; }
-.shelf-wait { flex: 0 0 calc((100% - 22px) / 3.25); aspect-ratio: 2 / 3; border-radius: 8px; background: color-mix(in srgb, var(--fg) 7%, transparent); animation: shelfPulse 1.2s ease-in-out infinite alternate; }
+.shelf-wait { flex: 0 0 calc((100% - 22px) / 2.4); aspect-ratio: 2 / 3; border-radius: 8px; background: color-mix(in srgb, var(--fg) 7%, transparent); animation: shelfPulse 1.2s ease-in-out infinite alternate; }
 @keyframes shelfPulse { from { opacity: .55; } to { opacity: 1; } }
+.shelf-row > .li.gbook .cap b { font-size: 14px; }
+.shelf-end { min-height: 40px; }
+.shelf-done { text-align: center; color: var(--muted); font-size: 13px; padding: 8px 16px 18px; }

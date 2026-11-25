@@ -151,6 +151,13 @@ const Sources = {
   /** A source from the store, for a shelf: checked exactly like installing it (checksum, rules), but not added to your list. */
   async previewDef(id) {
     if (this.def(id)) return this.def(id);
+    if (this._previewing && this._previewing[id]) return this._previewing[id];
+    this._previewing = this._previewing || {};
+    const p = this._previewing[id] = this.fetchPreview(id);
+    try { return await p; } finally { delete this._previewing[id]; }
+  },
+
+  async fetchPreview(id) {
     for (const repo of this.repos) {
       let idx;
       try { idx = await this.fetchIndex(repo); } catch (e) { continue; }

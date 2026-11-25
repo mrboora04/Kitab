@@ -119,26 +119,92 @@ const Browse = {
   drawShelves() {
     const box = $('#shelves');
     if (!box) return;
+    this._shelvesBox = box;
     const list = this.shelfList();
-    const key = list.map((sh) => sh.id).join('|');
+    const key = list.map((sh) => sh.id).join('|') + '#' + this.lang;
     if (box._key === key) return;                 // the same shelves are already on screen
     box._key = key;
     if (this._shelfIo) this._shelfIo.disconnect();
-    box.innerHTML = list.map((sh, i) => `
-      <section class="bshelf" data-shelf="${i}">
-        <div class="shelf-head"><div><h3>${esc(sh.title)}</h3>${sh.about ? `<small>${esc(sh.about)}</small>` : ''}</div><button class="see-all" data-all="${i}">See all ›</button></div>
-        <div class="shelf-row">${'<span class="shelf-wait"></span>'.repeat(4)}</div>
-      </section>`).join('');
-    this._shelves = list;
-    $$('#shelves [data-all]').forEach((b) => { b.onclick = () => this.openShelf(list[b.dataset.all]); });
+    if (this._moreIo) this._moreIo.disconnect();
+    box.innerHTML = '<div id="shelfEnd" class="shelf-end"></div>';
+    this._shown = new Set();                      // source:list pairs already on a shelf
+    this._pool = null; this._rr = 0;
     this._shelfIo = new IntersectionObserver((seen) => {
       for (const e of seen) {
         if (!e.isIntersecting) continue;
         this._shelfIo.unobserve(e.target);
-        this.fillShelf(list[e.target.dataset.shelf], e.target);
+        this.fillShelf(e.target._sh, e.target);
       }
     }, { rootMargin: '300px 0px' });
-    $$('#shelves .bshelf').forEach((el) => this._shelfIo.observe(el));
+    list.forEach((sh) => this.addShelf(sh));
+    // below the chosen shelves, more keep coming as you scroll: every list of every source, mixed
+    this._moreIo = new IntersectionObserver((seen) => { if (seen.some((e) => e.isIntersecting)) this.moreShelves(); }, { rootMargin: '600px 0px' });
+    this._moreIo.observe($('#shelfEnd'));
+  },
+
+  addShelf(sh) {
+    const key = sh.source + ':' + sh.list;
+    if (this._shown.has(key)) return false;
+    this._shown.add(key);
+    const el = document.createElement('section');
+    el.className = 'bshelf';
+    el._sh = sh;
+    el.innerHTML = `<div class="shelf-head"><div><h3>${esc(sh.title)}</h3>${sh.about ? `<small>${esc(sh.about)}</small>` : ''}</div><button class="see-all">See all ›</button></div>
+      <div class="shelf-row">${'<span class="shelf-wait"></span>'.repeat(3)}</div>`;
+    el.querySelector('.see-all').onclick = () => this.openShelf(sh);
+    $('#shelves').insertBefore(el, $('#shelfEnd'));
+    this._shelfIo.observe(el);
+    return true;
+  },
+
+  /** Every source this phone can use (built in, installed, or in the store), with its lists not shown yet. */
+  async shelfPool() {
+    const ids = new Set(Object.keys(Sources.builtin).concat(Object.keys(Sources.installed)));
+    for (const r of Sources.repos) { const ix = Sources.indexes[r.url]; if (ix) ix.sources.forEach((x) => ids.add(x.id)); }
+    const pool = [];
+    for (const id of ids) {
+      const h = Sources.health(id);
+      if (h && h.working === false) continue;
+      let def = null;
+      try { def = await Sources.previewDef(id); } catch (e) { def = null; }
+      if (!def || !(def.browse || []).length) continue;
+      if (this.lang && !this.speaks(Sources.asCatalog(def), this.lang)) continue;
+      pool.push({ def, lists: def.browse.filter((b) => !this._shown.has(def.id + ':' + b.key)) });
+    }
+    return pool;
+  },
+
+  async moreShelves() {
+    if (this._moreBusy) return;
+    this._moreBusy = true;
+    const box = this._shelvesBox;
+    try {
+      if (!this._pool) this._pool = await this.shelfPool();
+      if (box !== this._shelvesBox) return;
+      let added = 0, guard = 0;
+      while (added < 3 && this._pool.some((p) => p.lists.length) && guard++ < 200) {
+        const p = this._pool[this._rr++ % this._pool.length];
+        const b = p.lists.shift();
+        if (b && this.addShelf({ id: `auto-${p.def.id}-${b.key}`, title: b.label, about: p.def.name, source: p.def.id, list: b.key })) added++;
+      }
+      if (!this._pool.some((p) => p.lists.length)) {           // every list of every source is on a shelf
+        const end = $('#shelfEnd');
+        if (end) end.innerHTML = '<p class="shelf-done">That’s every shelf. Search or add sources for more.</p>';
+        this._moreIo.disconnect();
+      }
+    } catch (e) { /* try again on the next scroll */ }
+    finally {
+      this._moreBusy = false;
+      // still short of the bottom of the screen: keep going
+      const end = $('#shelfEnd');
+      if (end && this._pool && this._pool.some((q) => q.lists.length) && end.getBoundingClientRect().top < window.innerHeight + 600) setTimeout(() => this.moreShelves(), 50);
+    }
+  },
+
+  /** Books with a real cover go first; when a shelf has enough of them, the ones without a cover wait for "See all". */
+  coversFirst(entries) {
+    const withCover = entries.filter((e) => e.cover), without = entries.filter((e) => !e.cover);
+    return withCover.length >= 6 ? withCover : withCover.concat(without);
   },
 
   async fillShelf(sh, el) {
@@ -150,16 +216,36 @@ const Browse = {
         if (!def) throw new Error('no such source');
         const src = Sources.asCatalog(def);
         const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(sh.list)}&page=1`);
-        const entries = (feed.entries || []).filter((e) => e.title && !e.nav).slice(0, 12);
+        const entries = this.coversFirst((feed.entries || []).filter((e) => e.title && !e.nav));
         entries.forEach((e) => { e._src = src; });
-        hit = this.shelfCache[sh.id] = { entries, src, at: Date.now() };
+        hit = this.shelfCache[sh.id] = { entries, src, next: feed.next || null, at: Date.now() };
       }
       if (!hit.entries.length) throw new Error('empty');
-      row.innerHTML = hit.entries.map((e, i) => this.rowHtml(e, i)).join('');
-      row.querySelectorAll('[data-book]').forEach((b) => { b.onclick = () => this.showBook(hit.entries[b.dataset.book]); });
+      row.innerHTML = '';
+      this.appendToShelf(row, hit, hit.entries);
+      row.scrollLeft = 0;                         // a shelf starts at its first book
+      // sideways, too: the next page comes when you reach the end of the row
+      row.onscroll = () => {
+        if (row._busy || !hit.next || hit.entries.length >= 96) return;
+        if (row.scrollLeft + row.clientWidth < row.scrollWidth - row.clientWidth * 0.8) return;
+        row._busy = true;
+        Sources.load(hit.next).then((f) => {
+          const more = (f.entries || []).filter((e) => e.title && !e.nav && !hit.entries.some((x) => x.id === e.id));
+          more.forEach((e) => { e._src = hit.src; });
+          hit.next = more.length ? f.next || null : null;
+          hit.entries = hit.entries.concat(more);
+          this.appendToShelf(row, hit, more);
+        }).catch(() => { hit.next = null; }).finally(() => { row._busy = false; });
+      };
     } catch (e) {
       el.remove();                                // a shelf that cannot be filled just is not shown
     }
+  },
+
+  appendToShelf(row, hit, entries) {
+    const from = row.querySelectorAll('[data-book]').length;
+    row.insertAdjacentHTML('beforeend', entries.map((e, i) => this.rowHtml(e, from + i)).join(''));
+    row.querySelectorAll('[data-book]').forEach((b) => { if (!b._bound) { b._bound = true; b.onclick = () => this.showBook(hit.entries[b.dataset.book]); } });
   },
 
   /** "See all": the source, opened on that list. */

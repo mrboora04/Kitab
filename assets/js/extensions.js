@@ -110,7 +110,18 @@ const ExtUI = {
   warm() {
     if (this._warm) return;
     this._warm = true;
-    Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, false).catch(() => null))).then(() => {
+    Promise.all(Sources.repos.map((r) => Sources.fetchIndex(r, false).catch(() => null))).then(async () => {
+      // sources from Kitab's own list update themselves (checked like any install), so old recipes do not linger
+      const ix = Sources.indexes[OFFICIAL_REPO];
+      const official = Sources.repos.find((r) => r.url === OFFICIAL_REPO);
+      let updated = 0;
+      for (const x of Object.values(Sources.installed)) {
+        const e = ix && official && x.repo === OFFICIAL_REPO && ix.sources.find((q) => q.id === x.def.id);
+        if (e && Number(e.version) > x.def.version) {
+          try { await Sources.install(official, e); updated++; } catch (err) { /* stays on its version; offered under Updates */ }
+        }
+      }
+      if (updated) { Browse.shelfCache = {}; if (Browse._shelvesBox) Browse._shelvesBox._key = ''; }
       let updates = 0;
       for (const x of Object.values(Sources.installed)) {
         for (const r of Sources.repos) { const ix = Sources.indexes[r.url]; const e = ix && ix.sources.find((q) => q.id === x.def.id); if (e && Number(e.version) > x.def.version) updates++; }
