@@ -1,7 +1,7 @@
 {
-  "versionCode": 32,
-  "versionName": "1.21",
-  "notes": "Search inside the book you are reading",
+  "versionCode": 33,
+  "versionName": "1.22",
+  "notes": "Catalog sources, a library's whole list sorted into shelves",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "6662d979b8a8a15ceda39cac9fd47c4b1133d48c73d963c7490a4d3854517563"
+  "sha256": "f2022ed4f3fcc4f8d680f68fc1ff23f34c038c622fbb5cbcd53fd93567c9f911"
 }
