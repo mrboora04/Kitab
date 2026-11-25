@@ -14,7 +14,7 @@ const Browse = {
   LANGS: [['', 'All'], ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['ru', 'Russian'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['la', 'Latin']],
   tab: 'home',          // home or ext (Add sources)
   // shelves on the Browse home when the source list has none of its own (kitab-sources/shelves.json overrides these)
-  SHELVES: [{"id": "lang", "title": "In {language}", "byLang": {"en": {"source": "gutenberg", "list": "popular", "title": "Popular in English"}, "es": {"source": "wikisource-es", "list": "novelas"}, "fr": {"source": "wikisource-fr", "list": "romans"}, "de": {"source": "wikisource-de", "list": "romane"}, "it": {"source": "wikisource-it", "list": "romanzi"}, "pt": {"source": "wikisource-pt", "list": "romances"}, "ru": {"source": "wikisource-ru", "list": "romany"}, "ar": {"source": "african-storybook", "list": "ar"}}}, {"id": "classics", "title": "Popular classics", "source": "gutenberg", "list": "popular"}, {"id": "scans", "title": "From the world's libraries", "about": "Scanned by public and university libraries", "source": "internet-archive", "list": "popular"}, {"id": "fiction", "title": "Novels and stories", "source": "open-library", "list": "fiction"}, {"id": "textbooks", "title": "Free textbooks", "source": "openstax", "list": "all"}, {"id": "children", "title": "For children", "source": "gutenberg", "list": "children"}, {"id": "picture", "title": "Picture storybooks", "source": "african-storybook", "list": "new"}, {"id": "poetry", "title": "Poetry", "source": "open-library", "list": "poetry"}, {"id": "history", "title": "History", "source": "gutenberg", "list": "history"}, {"id": "science", "title": "Science", "source": "open-library", "list": "science"}, {"id": "philosophy", "title": "Philosophy", "source": "open-library", "list": "philosophy"}, {"id": "ws-novels", "title": "Novels on Wikisource", "source": "wikisource", "list": "novels"}],
+  SHELVES: [{"id": "lang", "title": "In {language}", "byLang": {"en": {"title": "Popular in English", "mix": [{"source": "gutenberg", "list": "popular"}, {"source": "open-library", "list": "popular"}]}, "es": {"mix": [{"source": "wikisource-es", "list": "novelas"}, {"source": "openstax", "list": "es"}]}, "fr": {"mix": [{"source": "wikisource-fr", "list": "romans"}, {"source": "wikisource-fr", "list": "contes"}]}, "de": {"mix": [{"source": "wikisource-de", "list": "romane"}, {"source": "wikisource-de", "list": "maerchen"}]}, "it": {"mix": [{"source": "wikisource-it", "list": "romanzi"}, {"source": "wikisource-it", "list": "racconti"}]}, "pt": {"mix": [{"source": "wikisource-pt", "list": "romances"}, {"source": "wikisource-pt", "list": "contos"}]}, "ru": {"mix": [{"source": "wikisource-ru", "list": "romany"}, {"source": "wikisource-ru", "list": "rasskazy"}]}, "ar": {"mix": [{"source": "african-storybook", "list": "ar"}]}}}, {"id": "popular", "title": "Popular classics", "mix": [{"source": "gutenberg", "list": "popular"}, {"source": "open-library", "list": "popular"}, {"source": "internet-archive", "list": "popular"}]}, {"id": "fiction", "title": "Novels and stories", "mix": [{"source": "open-library", "list": "fiction"}, {"source": "gutenberg", "list": "fiction"}, {"source": "wikisource", "list": "novels"}]}, {"id": "scans", "title": "From the world's libraries", "about": "Scanned by public and university libraries", "mix": [{"source": "internet-archive", "list": "popular"}, {"source": "internet-archive", "list": "classics"}]}, {"id": "children", "title": "For children", "mix": [{"source": "gutenberg", "list": "children"}, {"source": "open-library", "list": "children"}, {"source": "african-storybook", "list": "en"}]}, {"id": "textbooks", "title": "Free textbooks", "mix": [{"source": "openstax", "list": "all"}]}, {"id": "poetry", "title": "Poetry", "mix": [{"source": "open-library", "list": "poetry"}, {"source": "gutenberg", "list": "poetry"}, {"source": "wikisource", "list": "poems"}]}, {"id": "history", "title": "History", "mix": [{"source": "open-library", "list": "history"}, {"source": "gutenberg", "list": "history"}]}, {"id": "science", "title": "Science", "mix": [{"source": "open-library", "list": "science"}, {"source": "gutenberg", "list": "science"}]}, {"id": "philosophy", "title": "Philosophy", "mix": [{"source": "open-library", "list": "philosophy"}]}, {"id": "plays", "title": "Plays", "mix": [{"source": "wikisource", "list": "plays"}]}],
   shelfCache: {},      // shelf key -> { entries, src, at }
 
   init() {
@@ -111,9 +111,11 @@ const Browse = {
         if (!pick) continue;
         const name = (this.LANGS.find(([c]) => c === this.lang) || [])[1] || this.lang;
         out.unshift(Object.assign({ id: sh.id + '-' + this.lang, title: String(sh.title || '').replace('{language}', name) }, pick));
-      } else if (sh.source && sh.list) out.push(sh);
+      } else if (sh.mix || (sh.source && sh.list)) out.push(sh);
     }
-    return out.filter((sh) => { const h = Sources.health(sh.source); return !h || h.working !== false; });   // not a source that is down today
+    // a shelf mixes lists from several sources; a source that is down today drops out of it
+    return out.map((sh) => Object.assign({}, sh, { mix: (sh.mix || [{ source: sh.source, list: sh.list }]).filter((p) => { const h = Sources.health(p.source); return !h || h.working !== false; }) }))
+      .filter((sh) => sh.mix.length);
   },
 
   drawShelves() {
@@ -143,9 +145,10 @@ const Browse = {
   },
 
   addShelf(sh) {
-    const key = sh.source + ':' + sh.list;
-    if (this._shown.has(key)) return false;
-    this._shown.add(key);
+    const parts = sh.mix || [{ source: sh.source, list: sh.list }];
+    const keys = parts.map((p) => p.source + ':' + p.list);
+    if (!sh.mix && this._shown.has(keys[0])) return false;
+    keys.forEach((k) => this._shown.add(k));
     const el = document.createElement('section');
     el.className = 'bshelf';
     el._sh = sh;
@@ -185,7 +188,7 @@ const Browse = {
       while (added < 3 && this._pool.some((p) => p.lists.length) && guard++ < 200) {
         const p = this._pool[this._rr++ % this._pool.length];
         const b = p.lists.shift();
-        if (b && this.addShelf({ id: `auto-${p.def.id}-${b.key}`, title: b.label, about: p.def.name, source: p.def.id, list: b.key })) added++;
+        if (b && !this._shown.has(p.def.id + ':' + b.key) && this.addShelf({ id: `auto-${p.def.id}-${b.key}`, title: b.label, about: p.def.name, source: p.def.id, list: b.key })) added++;
       }
       if (!this._pool.some((p) => p.lists.length)) {           // every list of every source is on a shelf
         const end = $('#shelfEnd');
@@ -207,35 +210,66 @@ const Browse = {
     return withCover.length >= 6 ? withCover : withCover.concat(without);
   },
 
+  /** One list of one source: its first page, ready for a shelf. */
+  async shelfPart(p) {
+    const def = await Sources.previewDef(p.source);
+    if (!def) return null;
+    const src = Sources.asCatalog(def);
+    const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(p.list)}&page=1`);
+    const entries = (feed.entries || []).filter((e) => e.title && !e.nav);
+    entries.forEach((e) => { e._src = src; });
+    return { src, def, list: p.list, entries, next: feed.next || null };
+  },
+
+  /** Books from several lists, taken in turn (one from each), without the same title twice. */
+  interleave(lists, seen) {
+    const out = [], idx = lists.map(() => 0);
+    for (let more = true; more;) {
+      more = false;
+      lists.forEach((l, i) => {
+        while (idx[i] < l.length) {
+          const e = l[idx[i]++];
+          const t = String(e.title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+          if (seen.has(t)) continue;
+          seen.add(t); out.push(e); more = true; break;
+        }
+      });
+    }
+    return out;
+  },
+
   async fillShelf(sh, el) {
     const row = el.querySelector('.shelf-row');
     try {
       let hit = this.shelfCache[sh.id];
       if (!hit || Date.now() - hit.at > 3600e3) {
-        const def = await Sources.previewDef(sh.source);
-        if (!def) throw new Error('no such source');
-        const src = Sources.asCatalog(def);
-        const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(sh.list)}&page=1`);
-        const entries = this.coversFirst((feed.entries || []).filter((e) => e.title && !e.nav));
-        entries.forEach((e) => { e._src = src; });
-        hit = this.shelfCache[sh.id] = { entries, src, next: feed.next || null, at: Date.now() };
+        const parts = (await Promise.all((sh.mix || [{ source: sh.source, list: sh.list }]).map((p) => this.shelfPart(p).catch(() => null)))).filter(Boolean);
+        if (!parts.length) throw new Error('no such source');
+        const seen = new Set();
+        // covers first within each source, then one from each source in turn
+        const entries = this.coversFirst(this.interleave(parts.map((p) => this.coversFirst(p.entries)), seen));
+        hit = this.shelfCache[sh.id] = { parts, entries, seen, at: Date.now() };
       }
       if (!hit.entries.length) throw new Error('empty');
       row.innerHTML = '';
       this.appendToShelf(row, hit, hit.entries);
       row.scrollLeft = 0;                         // a shelf starts at its first book
-      // sideways, too: the next page comes when you reach the end of the row
+      // sideways, too: the next page of every list comes when you reach the end of the row
       row.onscroll = () => {
-        if (row._busy || !hit.next || hit.entries.length >= 96) return;
+        const waiting = hit.parts.filter((p) => p.next);
+        if (row._busy || !waiting.length || hit.entries.length >= 120) return;
         if (row.scrollLeft + row.clientWidth < row.scrollWidth - row.clientWidth * 0.8) return;
         row._busy = true;
-        Sources.load(hit.next).then((f) => {
-          const more = (f.entries || []).filter((e) => e.title && !e.nav && !hit.entries.some((x) => x.id === e.id));
-          more.forEach((e) => { e._src = hit.src; });
-          hit.next = more.length ? f.next || null : null;
+        Promise.all(waiting.map((p) => Sources.load(p.next).then((f) => {
+          const got = (f.entries || []).filter((e) => e.title && !e.nav);
+          got.forEach((e) => { e._src = p.src; });
+          p.next = got.length ? f.next || null : null;
+          return got;
+        }).catch(() => { p.next = null; return []; }))).then((lists) => {
+          const more = this.interleave(lists, hit.seen);
           hit.entries = hit.entries.concat(more);
           this.appendToShelf(row, hit, more);
-        }).catch(() => { hit.next = null; }).finally(() => { row._busy = false; });
+        }).finally(() => { row._busy = false; });
       };
     } catch (e) {
       el.remove();                                // a shelf that cannot be filled just is not shown
@@ -250,6 +284,7 @@ const Browse = {
 
   /** "See all": the source, opened on that list. */
   async openShelf(sh) {
+    if (sh.mix) sh = Object.assign({}, sh, sh.mix[0]);            // a mixed shelf opens its first list
     const def = await Sources.previewDef(sh.source);
     if (!def) return App.toast('This shelf is not available right now');
     const src = Sources.asCatalog(def);
@@ -428,14 +463,13 @@ const Browse = {
     if (e.nav) {      // a section of the catalog: a coloured tile (its own picture when it has one)
       return `<button class="li nav tile" data-nav="${idx}" style="--h:${this.tint(e.title)}">${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<span class="tile-text"><b>${esc(e._short || e.title)}</b>${e.summary ? `<small>${esc(e.summary.slice(0, 90))}</small>` : ''}</span></button>`;
     }
-    // a book: its cover (or a printed-looking one), the title over the bottom of it, and one small badge
-    const fmt = (e.formats || []).map((f) => f.format).filter((f, k, a) => a.indexOf(f) === k).join(' · ');
+    // a book: its cover picture with the title over the bottom; without a picture, a printed-looking cover with the title and author
     const badge = this.have(e) ? '<em class="badge have">In library</em>' : (e._sourceName ? `<em class="badge">${esc(e._sourceName)}</em>` : '');
     const by = (e.authors || []).join(', ') || e.note || '';
     return `<button class="li gbook" data-book="${idx}" aria-label="${esc(e.title + (by ? ', ' + by : ''))}">
-        <span class="cover" style="--c1:hsl(${this.tint(e.title)} 38% 42%);--c2:hsl(${this.tint(e.title)} 45% 24%)">
-          <span class="gen"><span class="type">${esc(fmt || 'BOOK')}</span><span class="by">${esc(by.slice(0, 40))}</span></span>
-          ${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}
+        <span class="cover${e.cover ? '' : ' noimg'}" style="--c1:hsl(${this.tint(e.title)} 38% 42%);--c2:hsl(${this.tint(e.title)} 45% 24%)">
+          <span class="gen"><span class="gt">${esc(e.title.slice(0, 90))}</span><span class="ga">${esc(by.slice(0, 60))}</span></span>
+          ${e.cover ? `<img loading="lazy" src="${esc(e.cover)}" alt="" onerror="this.parentNode.classList.add('noimg');this.remove()">` : ''}
           <span class="cap"><b>${esc(e.title)}</b></span>${badge}</span></button>`;
   },
 

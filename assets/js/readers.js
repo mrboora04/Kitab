@@ -1748,12 +1748,27 @@ class ScanOnlineReader {
     return Array.isArray(v) ? String(v[0] || '') : String(v || '');
   }
 
+  /** Opens at once on the saved page; the page list (sizes, page numbers, words) arrives in the background. */
   async open(loc) {
+    this.n = Math.max(1, loc && loc.page || 1);
+    // an Internet Archive book can show any page straight away, before its page list is ready
+    const m = /^https:\/\/iiif\.archive\.org\/iiif\/(?:3\/)?([^/]+)\/manifest\.json$/.exec(this.url);
+    this.ia = m ? decodeURIComponent(m[1]) : '';
+    if (this.ia) {
+      this.show();
+      this.listing = this.loadList().catch(() => null);
+      return;
+    }
+    this.wrap.innerHTML = '<div class="so-wait"><div class="spinner"></div></div>';
+    await this.loadList();                              // other libraries: their page list is needed first
+  }
+
+  async loadList() {
     const r = await Opds.fetchText(this.url);
     let m;
     try { m = JSON.parse(r.body); } catch (e) { throw new Error('The library did not send the pages of this book'); }
     const canvases = m.items || (m.sequences && m.sequences[0] && m.sequences[0].canvases) || [];
-    this.pages = canvases.map((c) => {
+    const pages = canvases.map((c) => {
       const anno = c.items && c.items[0] && c.items[0].items && c.items[0].items[0];
       const body = anno && anno.body;
       const svc = body && body.service && body.service[0];
@@ -1765,10 +1780,19 @@ class ScanOnlineReader {
         text: (c.annotations && c.annotations[0] && c.annotations[0].id) || '',
       };
     }).filter((p) => /^https:/.test(p.svc || p.img));
-    if (!this.pages.length) throw new Error('This book has no pages to show');
+    if (!pages.length) throw new Error('This book has no pages to show');
+    if (!this.wrap.isConnected) return;               // closed meanwhile
+    this.pages = pages;
     this.title = ScanOnlineReader.label(m.label);
-    this.n = clamp(loc && loc.page || 1, 1, this.pages.length);
-    this.show();
+    this.n = clamp(this.n, 1, pages.length);
+    // now the page has its exact size, its page number and its words
+    this.show();                                        // the same page again, now from the page list
+    this.app.onRelocated();
+  }
+
+  scaleFor(p) {
+    const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
+    return Math.min((W - 8) / p.w, (H - 8) / p.h);
   }
 
   imageUrl(p, width) {
@@ -1778,6 +1802,7 @@ class ScanOnlineReader {
 
   /** The page fitted to the screen, with its words laid over it once they arrive. */
   show() {
+    if (!this.pages.length) return this.showDirect();
     const p = this.pages[this.n - 1];
     const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
     const scale = Math.min((W - 8) / p.w, (H - 8) / p.h);
@@ -1801,6 +1826,36 @@ class ScanOnlineReader {
       const q = this.pages[this.n - 1 + k];
       if (q) { const s2 = Math.min((W - 8) / q.w, (H - 8) / q.h); new Image().src = this.imageUrl(q, q.w * s2 * dpr); }
     }
+    this.app.onRelocated();
+  }
+
+  /** Before the page list arrives: the Internet Archive's own picture of page n, sized when it loads. */
+  showDirect() {
+    const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const url = (n) => `https://archive.org/download/${encodeURIComponent(this.ia)}/page/n${n - 1}_w${Math.min(1600, Math.round((W - 8) * dpr))}.jpg`;
+    const box = document.createElement('div');
+    box.className = 'so-page';
+    box._n = this.n; box._direct = true;
+    box.style.width = Math.round(Math.min(W - 8, (H - 8) * 2 / 3)) + 'px';
+    box.style.height = Math.round(Math.min(H - 8, (W - 8) * 3 / 2)) + 'px';
+    box.innerHTML = '<div class="so-wait"><div class="spinner"></div></div><img alt="" draggable="false"><div class="so-text"></div>';
+    const img = box.querySelector('img');
+    img.onload = () => {
+      const s = Math.min((W - 8) / img.naturalWidth, (H - 8) / img.naturalHeight);
+      box.style.width = Math.round(img.naturalWidth * s) + 'px';
+      box.style.height = Math.round(img.naturalHeight * s) + 'px';
+      box.classList.add('loaded');
+    };
+    img.onerror = () => {
+      if (this.n > 1 && this.cur === box) { this.end = this.n - 1; this.n--; this.showDirect(); return; }   // past the last page
+      box.querySelector('.so-wait').innerHTML = '<p>This page did not load. Check your internet connection, then turn the page again.</p>';
+    };
+    img.src = url(this.n);
+    this.wrap.innerHTML = '';
+    this.wrap.appendChild(box);
+    this.cur = box;
+    new Image().src = url(this.n + 1);                  // the next page waits in the cache
     this.app.onRelocated();
   }
 
@@ -1832,12 +1887,14 @@ class ScanOnlineReader {
     this.markFound(box);
   }
 
-  async next() { if (this.n >= this.pages.length) return false; this.n++; this.show(); return true; }
+  get total() { return this.pages.length || this.end || 0; }
+  async next() { if (this.total && this.n >= this.total) return false; this.n++; this.show(); return true; }
   async prev() { if (this.n <= 1) return false; this.n--; this.show(); return true; }
-  async goTo(loc) { this.n = clamp(loc && loc.page || 1, 1, this.pages.length); this.show(); }
-  goToProgress(f) { return this.goTo({ page: Math.round(f * (this.pages.length - 1)) + 1 }); }
+  async goTo(loc) { this.n = Math.max(1, loc && loc.page || 1); if (this.total) this.n = Math.min(this.n, this.total); this.show(); }
+  goToProgress(f) { return this.total ? this.goTo({ page: Math.round(f * (this.total - 1)) + 1 }) : Promise.resolve(); }
 
   location() {
+    if (!this.pages.length) return { loc: { page: this.n }, progress: 0, label: `Page ${this.n}`, chapter: '' };
     const total = this.pages.length, p = this.pages[this.n - 1] || {};
     const printed = p.label && p.label !== String(this.n) && /^[\divxlcIVXLC]{1,8}$/.test(p.label) ? ` (p. ${p.label})` : '';
     return { loc: { page: this.n }, progress: total > 1 ? (this.n - 1) / (total - 1) : 0, label: `Page ${this.n} of ${total}${printed}`, chapter: '' };
@@ -1848,6 +1905,8 @@ class ScanOnlineReader {
 
   /** Searches the library's OCR words, page by page (four pages at a time, in the background). */
   async search(q, hit, progress, alive) {
+    if (!this.pages.length && this.listing) await this.listing;      // the page list first
+    if (!this.pages.length) throw new Error('the pages of this book are still loading');
     const total = this.pages.length;
     let next = 1, done = 0;
     const worker = async () => {

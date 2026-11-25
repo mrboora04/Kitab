@@ -348,7 +348,9 @@ const App = {
   async openBook(name) {
     if (EyeCare.resting()) return EyeCare.showRest();
     if (this.reader) await this.closeBook(true);
-    busy(true, 'Opening…');
+    const token = (this._openTok = {});                 // Back while opening cancels it (see closeBook)
+    const online = /^online:/.test(name);
+    if (!online) busy(true, 'Opening…');              // a book read online shows its first page at once instead
     Native.setSecure && Native.setSecure(!!this.settings.protect);   // book pages are protected from screenshots
     this.name = name;
     this.meta = this.bookMeta(name);
@@ -381,7 +383,6 @@ const App = {
         if (!this.meta.online || !this.meta.online.read) throw new Error('This book is no longer available online');
         this.reader = new ScanOnlineReader($('#stage'), this, this.meta.online.read);
         await this.reader.open(this.meta.loc);
-        if (this.reader.title && !this.meta.title) this.meta.title = this.reader.title;
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
         await this.reader.open(this.meta.loc);
@@ -393,12 +394,14 @@ const App = {
         await this.reader.open(this.meta.loc);
       }
     } catch (e) {
+      if (this._openTok !== token) return;              // closed meanwhile: nothing to report
       console.error(e);
       busy(false);
       toast('Could not open this book: ' + (e.message || e));
       this.closeBook();
       return;
     }
+    if (this._openTok !== token || !this.meta) return;  // closed with Back while it was opening
     $('#bookTitle').textContent = this.meta.title || prettyName(name);
     this.meta.lastRead = Date.now();
     this.saveMeta();
@@ -466,6 +469,8 @@ const App = {
   },
 
   async closeBook(keepView) {
+    this._openTok = null;                               // a book still opening stops
+    busy(false);
     if (this.name) OCR.cancel(this.name + ':', 'reader');   // the background scan of the whole book keeps going
     this.stopTts();
     if (this.hlMode) this.toggleHl(false);
@@ -565,6 +570,7 @@ const App = {
       return true;                                                        // a closing countdown cannot be skipped
     }
     if (this._dialogOpen) { this._dialogOpen(); return true; }
+    if (this._openTok && !$('#busy').classList.contains('hidden')) { this.closeBook(); return true; }   // stop opening
     if ($('#reader').classList.contains('hidden')) {
       if (document.querySelector('.menu')) { document.querySelector('.menu').remove(); return true; }
       if (this.tab === 'browse' && Browse.back()) return true;
