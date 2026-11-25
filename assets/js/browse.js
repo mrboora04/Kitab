@@ -13,6 +13,9 @@ const Browse = {
   lang: store.get('er.lang', ''),      // global search language ('' = all)
   LANGS: [['', 'All'], ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['pt', 'Portuguese'], ['ru', 'Russian'], ['zh', 'Chinese'], ['ja', 'Japanese'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['la', 'Latin']],
   tab: 'home',          // home or ext (Add sources)
+  // shelves on the Browse home when the source list has none of its own (kitab-sources/shelves.json overrides these)
+  SHELVES: [{"id": "lang", "title": "In {language}", "byLang": {"en": {"source": "gutenberg", "list": "popular", "title": "Popular in English"}, "es": {"source": "wikisource-es", "list": "novelas"}, "fr": {"source": "wikisource-fr", "list": "romans"}, "de": {"source": "wikisource-de", "list": "romane"}, "it": {"source": "wikisource-it", "list": "romanzi"}, "pt": {"source": "wikisource-pt", "list": "romances"}, "ru": {"source": "wikisource-ru", "list": "romany"}, "ar": {"source": "african-storybook", "list": "ar"}}}, {"id": "classics", "title": "Popular classics", "source": "gutenberg", "list": "popular"}, {"id": "scans", "title": "From the world's libraries", "about": "Scanned by public and university libraries", "source": "internet-archive", "list": "popular"}, {"id": "fiction", "title": "Novels and stories", "source": "open-library", "list": "fiction"}, {"id": "textbooks", "title": "Free textbooks", "source": "openstax", "list": "all"}, {"id": "children", "title": "For children", "source": "gutenberg", "list": "children"}, {"id": "picture", "title": "Picture storybooks", "source": "african-storybook", "list": "new"}, {"id": "poetry", "title": "Poetry", "source": "open-library", "list": "poetry"}, {"id": "history", "title": "History", "source": "gutenberg", "list": "history"}, {"id": "science", "title": "Science", "source": "open-library", "list": "science"}, {"id": "philosophy", "title": "Philosophy", "source": "open-library", "list": "philosophy"}, {"id": "ws-novels", "title": "Novels on Wikisource", "source": "wikisource", "list": "novels"}],
+  shelfCache: {},      // shelf key -> { entries, src, at }
 
   init() {
     $('#goExt').onclick = () => this.go('ext');
@@ -44,6 +47,7 @@ const Browse = {
         <span class="src-text"><b>${esc(s.name)}</b><small>${esc(s.blurb || s.url)}</small>${this.downNote(s)}</span>
         ${custom ? `<span class="src-del" data-del="${esc(s.id)}" aria-label="Remove catalog">✕</span>` : '<span class="chev">›</span>'}
       </button>`;
+    this.drawShelves();
     $('#sourceList').innerHTML = Sources.catalogs().map((s) => card(s)).join('') + this.custom.map((s) => card(s, true)).join('');
     $$('#sourceList [data-src]').forEach((b) => {
       b.onclick = (e) => {
@@ -71,6 +75,7 @@ const Browse = {
         b.onclick = () => {
           this.lang = b.dataset.lang;
           store.set('er.lang', this.lang);
+          if (!this.stack.length && this.tab === 'home') this.drawShelves();
           this.drawLangs();
           const view = this.stack[this.stack.length - 1];
           if (view && view.source.id === 'all' && view.q) this.globalSearch(view.q);
@@ -94,6 +99,80 @@ const Browse = {
   },
 
   all() { return Sources.catalogs().concat(this.custom); },
+
+  /* ---------------- shelves: rows of covers on the Browse home ---------------- */
+  shelfList() {
+    let list = this.SHELVES;
+    for (const r of Sources.repos) { const ix = Sources.indexes[r.url]; if (ix && ix.shelves && ix.shelves.length) { list = ix.shelves; break; } }
+    const out = [];
+    for (const sh of list) {
+      if (sh.byLang) {                      // the shelf for the language chosen under the search box, first
+        const pick = this.lang && sh.byLang[this.lang];
+        if (!pick) continue;
+        const name = (this.LANGS.find(([c]) => c === this.lang) || [])[1] || this.lang;
+        out.unshift(Object.assign({ id: sh.id + '-' + this.lang, title: String(sh.title || '').replace('{language}', name) }, pick));
+      } else if (sh.source && sh.list) out.push(sh);
+    }
+    return out.filter((sh) => { const h = Sources.health(sh.source); return !h || h.working !== false; });   // not a source that is down today
+  },
+
+  drawShelves() {
+    const box = $('#shelves');
+    if (!box) return;
+    const list = this.shelfList();
+    const key = list.map((sh) => sh.id).join('|');
+    if (box._key === key) return;                 // the same shelves are already on screen
+    box._key = key;
+    if (this._shelfIo) this._shelfIo.disconnect();
+    box.innerHTML = list.map((sh, i) => `
+      <section class="bshelf" data-shelf="${i}">
+        <div class="shelf-head"><div><h3>${esc(sh.title)}</h3>${sh.about ? `<small>${esc(sh.about)}</small>` : ''}</div><button class="see-all" data-all="${i}">See all ›</button></div>
+        <div class="shelf-row">${'<span class="shelf-wait"></span>'.repeat(4)}</div>
+      </section>`).join('');
+    this._shelves = list;
+    $$('#shelves [data-all]').forEach((b) => { b.onclick = () => this.openShelf(list[b.dataset.all]); });
+    this._shelfIo = new IntersectionObserver((seen) => {
+      for (const e of seen) {
+        if (!e.isIntersecting) continue;
+        this._shelfIo.unobserve(e.target);
+        this.fillShelf(list[e.target.dataset.shelf], e.target);
+      }
+    }, { rootMargin: '300px 0px' });
+    $$('#shelves .bshelf').forEach((el) => this._shelfIo.observe(el));
+  },
+
+  async fillShelf(sh, el) {
+    const row = el.querySelector('.shelf-row');
+    try {
+      let hit = this.shelfCache[sh.id];
+      if (!hit || Date.now() - hit.at > 3600e3) {
+        const def = await Sources.previewDef(sh.source);
+        if (!def) throw new Error('no such source');
+        const src = Sources.asCatalog(def);
+        const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(sh.list)}&page=1`);
+        const entries = (feed.entries || []).filter((e) => e.title && !e.nav).slice(0, 12);
+        entries.forEach((e) => { e._src = src; });
+        hit = this.shelfCache[sh.id] = { entries, src, at: Date.now() };
+      }
+      if (!hit.entries.length) throw new Error('empty');
+      row.innerHTML = hit.entries.map((e, i) => this.rowHtml(e, i)).join('');
+      row.querySelectorAll('[data-book]').forEach((b) => { b.onclick = () => this.showBook(hit.entries[b.dataset.book]); });
+    } catch (e) {
+      el.remove();                                // a shelf that cannot be filled just is not shown
+    }
+  },
+
+  /** "See all": the source, opened on that list. */
+  async openShelf(sh) {
+    const def = await Sources.previewDef(sh.source);
+    if (!def) return App.toast('This shelf is not available right now');
+    const src = Sources.asCatalog(def);
+    await this.open(src, src.url, src.name);
+    const view = this.stack[this.stack.length - 1];
+    if (!view || !view.tabs) return;
+    const i = view.tabs.findIndex((t) => t.url.includes('k=' + encodeURIComponent(sh.list) + '&'));
+    if (i > 0) this.switchTab(i);
+  },
 
   /** "Not working right now", when the store's daily check says so. */
   downNote(s) {

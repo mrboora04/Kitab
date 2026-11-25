@@ -735,3 +735,18 @@ body.is-online .keep-btn { display: inline-block; }
 .find-hit mark { background: color-mix(in srgb, var(--accent) 28%, transparent); color: inherit; font-weight: 700; border-radius: 3px; padding: 0 1px; }
 ::highlight(found) { background-color: rgba(255, 213, 74, .6); }
 .so-text span.found { background: rgba(255, 213, 74, .45); }
+
+/* Shelves on the Browse home: rows of covers that scroll sideways */
+#shelves { margin: 0 -16px 6px; }
+.bshelf { margin: 0 0 22px; display: block; }
+.shelf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 0 16px 9px; }
+.shelf-head h3 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.2px; }
+.shelf-head small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+.see-all { flex: none; background: none; border: 0; padding: 4px 0; color: var(--accent); font: 600 14px/1 system-ui, sans-serif; }
+.shelf-row { display: flex; gap: 11px; overflow-x: auto; padding: 0 16px 4px; scroll-snap-type: x proximity; scroll-padding: 16px; scrollbar-width: none; }
+.shelf-row::-webkit-scrollbar { display: none; }
+.shelf-row > .li.gbook { flex: 0 0 calc((100% - 22px) / 3.25); scroll-snap-align: start; border: 0; }
+.shelf-row > .li.gbook .cover { margin: 0; border-radius: 8px; }
+.shelf-row > .li.gbook .cover img { background: transparent; }
+.shelf-wait { flex: 0 0 calc((100% - 22px) / 3.25); aspect-ratio: 2 / 3; border-radius: 8px; background: color-mix(in srgb, var(--fg) 7%, transparent); animation: shelfPulse 1.2s ease-in-out infinite alternate; }
+@keyframes shelfPulse { from { opacity: .55; } to { opacity: 1; } }

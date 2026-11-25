@@ -23,6 +23,7 @@ const Sources = {
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
   catalogs: {},                            // source id -> { data, at }: a catalog source's whole list, kept for a while
+  preview: {},                             // source id -> def: a store source used by a shelf, checked but not installed
 
   saveRepos() { store.set('er.repos', this.repos); },
 
@@ -107,6 +108,11 @@ const Sources = {
       .filter((k) => k && /^[a-z0-9-]{2,40}$/.test(k.id || '') && typeof k.name === 'string' && Array.isArray(k.sources)).slice(0, 10)
       .map((k) => ({ id: k.id, name: text(k.name, 60), icon: text(k.icon || '🎁', 4), about: text(k.about, 140), sources: k.sources.filter((i) => /^[a-z0-9-]{2,40}$/.test(i)).slice(0, 12) }));
     const out = { name: String(idx.name || repo.name || 'Repository').slice(0, 60), sources, directory, packs, base: r.url || repo.url, at: Date.now(), status: null };
+    // the shelves for the Browse home (optional)
+    try {
+      const sh = JSON.parse((await Opds.fetchText(new URL('shelves.json', out.base).toString())).body);
+      if (sh && sh.schema === 1 && Array.isArray(sh.shelves)) out.shelves = sh.shelves.slice(0, 30);
+    } catch (e) { /* no shelves here */ }
     // the daily check's results, next to the list (optional: a list without one is fine)
     try {
       const st = JSON.parse((await Opds.fetchText(new URL('status.json', out.base).toString())).body);
@@ -140,7 +146,27 @@ const Sources = {
   /** Every source Browse shows: the built-in ones first, then the installed ones. */
   catalogs() { return Object.values(this.builtin).concat(this.list()).map((d) => this.asCatalog(d)); },
 
-  def(id) { return (this.installed[id] && this.installed[id].def) || this.builtin[id] || null; },
+  def(id) { return (this.installed[id] && this.installed[id].def) || this.builtin[id] || this.preview[id] || null; },
+
+  /** A source from the store, for a shelf: checked exactly like installing it (checksum, rules), but not added to your list. */
+  async previewDef(id) {
+    if (this.def(id)) return this.def(id);
+    for (const repo of this.repos) {
+      let idx;
+      try { idx = await this.fetchIndex(repo); } catch (e) { continue; }
+      const entry = idx.sources.find((x) => x.id === id);
+      if (!entry || !entry.sha256) continue;
+      try {
+        const r = await Opds.fetchText(new URL(entry.file, idx.base).toString());
+        if ((await this.sha256(r.body)) !== String(entry.sha256).toLowerCase()) continue;
+        const def = JSON.parse(r.body);
+        if (def.id !== id || this.validate(def)) continue;
+        this.preview[id] = def;
+        return def;
+      } catch (e) { /* try the next list */ }
+    }
+    return null;
+  },
 
   /** A source as a Browse "catalog": the root page is an ext: address that Sources.load answers. */
   asCatalog(def) {
