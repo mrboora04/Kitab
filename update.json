@@ -1,7 +1,7 @@
 {
-  "versionCode": 34,
-  "versionName": "1.23",
-  "notes": "Browse shelves",
+  "versionCode": 35,
+  "versionName": "1.24",
+  "notes": "Bigger shelves, covers first, endless shelves both ways",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "6e00ccb1c674d54fa6a74c8fd701b8fd9e2a345a2e49cd24716f328e130da394"
+  "sha256": "defc61757e8c39520ab9ada2ce856dec17665d03dc8feb13d97fea74d7d4d9c1"
 }
