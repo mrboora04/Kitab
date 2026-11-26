@@ -1,7 +1,7 @@
 {
-  "versionCode": 39,
-  "versionName": "1.28",
-  "notes": "PDF pages drawn by Android, shelves shown at once",
+  "versionCode": 40,
+  "versionName": "1.29",
+  "notes": "Read now on every book, quick EPUBs first",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "bc0aebb63d6c20135a9bff4cc981ecdb43c36cb39106bd69efb531c44c7485dc"
+  "sha256": "fb308357c09b9ceff61e7762742d609e52b45c7f25fd58885ff8fe0aca9b2bd8"
 }
