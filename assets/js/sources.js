@@ -22,7 +22,7 @@ const Sources = {
   builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 5, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "coverHosts": ["gutenberg.pglaf.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "tagSearch": {"url": "https://gutendex.com/books/?topic={tag}"}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": {"tpl": "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.cover.medium.jpg#{formats.image/jpeg|enc}"}, "tags": ["subjects", "bookshelves"], "formats": [{"format": "EPUB", "url": {"tpl": "https://www.gutenberg.org/ebooks/{id}.epub.noimages#{formats.application/epub+zip|enc}"}}, {"format": "EPUB", "label": "EPUB with pictures", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular{lang}"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending{lang}"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction{lang}"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children{lang}"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry{lang}"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history{lang}"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science{lang}"}]} },
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
-  catalogs: {},                            // source id -> { data, at }: a catalog source's whole list, kept for a while
+  catalogCache: {},                        // source id -> { data, at }: a catalog source's whole list, kept for a while
   preview: {},                             // source id -> def: a store source used by a shelf, checked but not installed
 
   saveRepos() { store.set('er.repos', this.repos); },
@@ -335,7 +335,7 @@ const Sources = {
   /* --- catalog sources: the whole list of books is one file (built every day by the source list);
          Kitab searches it and makes its lists on the phone --- */
   async catalogData(def) {
-    const mem = this.catalogs[def.id];
+    const mem = this.catalogCache[def.id];
     if (mem && Date.now() - mem.at < 6 * 3600e3) return mem.data;
     let data;
     try {
@@ -345,7 +345,7 @@ const Sources = {
       throw e.status ? e : new Error('The list of books could not be read');
     }
     if (!data || !Array.isArray(data.books)) throw new Error('The list of books could not be read');
-    this.catalogs[def.id] = { data, at: Date.now() };
+    this.catalogCache[def.id] = { data, at: Date.now() };
     return data;
   },
 

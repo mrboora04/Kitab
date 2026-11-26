@@ -135,6 +135,18 @@ const App = {
     return list.map((b) => Object.assign(b, { meta: this.bookMeta(b.name) }));
   },
 
+  /** A new file under a name the library already had (e.g. "EPUB with pictures" after "EPUB"): what Kitab saved about
+   *  the old file (position, page locations, scanned text, word positions) belongs to the old file, so it goes. */
+  forgetFile(name) {
+    try { localStorage.removeItem('er.locs.' + name); } catch (e) { /* ignore */ }
+    try { WordStore.clearBook(name); } catch (e) { /* ignore */ }
+    try { if (window.Android && Android.deleteScans) Android.deleteScans(name); } catch (e) { /* ignore */ }
+    try { Object.keys(localStorage).filter((k) => k.startsWith(`er.ocr3.${name}.`)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+    const meta = this.bookMeta(name);
+    ['loc', 'progress', 'scanned', 'scanComplete', 'scanTotal', 'scanDone', 'scanAll', 'pdfMode', 'cover', 'coverUrl', 'finished'].forEach((k) => delete meta[k]);
+    store.set(this.bookKey(name), meta);
+  },
+
   /** Books read online (pages from the library's website, nothing downloaded): only in History. */
   onlineBooks() {
     return store.get('er.online', []).map((name) => ({ name, online: true, meta: this.bookMeta(name) })).filter((b) => b.meta.online);
@@ -256,7 +268,7 @@ const App = {
     $$('#historyList [data-open]').forEach((el) => { el.onclick = () => this.openBook(el.dataset.open); });
     $('#clearHistory').classList.toggle('hidden', !books.length);
     $('#clearHistory').onclick = async () => {
-      if (!(await this.dialog({ title: 'Clear history?', message: 'Your books and bookmarks stay. Reading positions are forgotten.', ok: 'Clear', danger: true }))) return;
+      if (!(await this.dialog({ title: 'Clear history?', message: 'Your books and highlights stay. Reading positions are forgotten.', ok: 'Clear', danger: true }))) return;
       this.books().forEach((b) => { const m = b.meta; delete m.lastRead; delete m.loc; m.progress = 0; store.set(this.bookKey(b.name), m); });
       this.onlineBooks().forEach((b) => store.del(this.bookKey(b.name)));
       store.set('er.online', []);
@@ -341,6 +353,7 @@ const App = {
   onImportStarted() { busy(true, 'Adding book…'); },
   onImported(name) {
     busy(false);
+    if (name && store.get(this.bookKey(name), null)) this.forgetFile(name);   // a file of the same name was replaced
     if (name) this.openBook(name);
     else this.renderLibrary();
   },
@@ -366,6 +379,7 @@ const App = {
     this.applySettings(true);
     try {
       if (type === 'pdf') {
+        NativePdf.reset(name);
         this.pdf = await openPdf(url);   // read in pieces when the phone allows it, else whole
         const info = await this.pdf.getMetadata().catch(() => null);
         const t = info && info.info && info.info.Title;

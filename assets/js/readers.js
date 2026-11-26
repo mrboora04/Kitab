@@ -78,9 +78,10 @@ const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl:
 
 /** PDF pages drawn by Android itself (much faster than pdf.js); a book Android cannot draw falls back to pdf.js. */
 const NativePdf = {
-  bad: new Set(),
+  fails: new Map(),                 // book -> pages Android could not draw (in this opening of the book)
+  reset(key) { this.fails.delete(key); },
   ok(key) {
-    try { return !!(key && window.Android && Android.canRenderPdf && Android.canRenderPdf() && !this.bad.has(key)); } catch (e) { return false; }
+    try { return !!(key && window.Android && Android.canRenderPdf && Android.canRenderPdf() && (this.fails.get(key) || 0) < 3); } catch (e) { return false; }
   },
   /** Page n of book `key`, `w` pixels wide, as a loaded <img>; null when Android could not draw it. */
   image(key, n, w) {
@@ -88,7 +89,7 @@ const NativePdf = {
       const img = new Image();
       img.decoding = 'async';
       img.onload = () => resolve(img);
-      img.onerror = () => { this.bad.add(key); resolve(null); };
+      img.onerror = () => { this.fails.set(key, (this.fails.get(key) || 0) + 1); resolve(null); };   // pdf.js draws this page; three failures: the whole book
       img.src = `render/${encodeURIComponent(key)}?p=${n}&w=${Math.max(64, Math.min(2400, Math.round(w)))}`;
     });
   },
@@ -1506,8 +1507,10 @@ class EpubReader {
     const key = 'er.locs.' + this.name;
     let saved = null;
     try { saved = localStorage.getItem(key); } catch (e) { /* ignore */ }
-    if (saved) this.book.locations.load(saved);
-    else {
+    if (saved) {
+      try { this.book.locations.load(saved); } catch (e) { saved = null; try { localStorage.removeItem(key); } catch (x) { /* ignore */ } }
+    }
+    if (!saved) {
       await this.book.locations.generate(1200);
       try { localStorage.setItem(key, this.book.locations.save()); } catch (e) { /* storage full */ }
     }

@@ -41,7 +41,7 @@ const Opds = (() => {
   function fetchText(url) {
     return new Promise((resolve, reject) => {
       const id = 'h' + (++counter);
-      const timer = setTimeout(() => { delete pending[id]; reject(new Error('The catalog took too long to answer')); }, 45000);
+      const timer = setTimeout(() => { delete pending[id]; reject(new Error('The catalog took too long to answer')); }, 90000);
       pending[id] = (r) => {
         clearTimeout(timer);
         if (r.status >= 200 && r.status < 300) resolve(r);

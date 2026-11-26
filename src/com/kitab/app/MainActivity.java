@@ -280,13 +280,16 @@ public class MainActivity extends Activity {
     private PdfRenderer pdfRenderer;
     private ParcelFileDescriptor pdfFd;
     private String pdfName;
+    private String pdfStamp;            // size and time of the file the renderer has open
 
     /** Page n (from 1) of a PDF in the library, `w` pixels wide, as a JPEG. The last PDF stays open for the next page. */
     synchronized byte[] renderPdfPage(String name, int n, int w) throws Exception {
         File f = new File(booksDir, name);
         if (!f.getCanonicalPath().startsWith(booksDir.getCanonicalPath() + File.separator)) throw new Exception("bad path");
-        if (!name.equals(pdfName) || pdfRenderer == null) {
+        String stamp = f.length() + ":" + f.lastModified();
+        if (!name.equals(pdfName) || pdfRenderer == null || !stamp.equals(pdfStamp)) {
             closePdf();
+            pdfStamp = stamp;
             pdfFd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
             pdfRenderer = new PdfRenderer(pdfFd);
             pdfName = name;
@@ -396,7 +399,9 @@ public class MainActivity extends Activity {
     }
 
     File scanDir(String book) {
-        return new File(scansDir, book.replaceAll("[^A-Za-z0-9._-]", "_"));
+        String safe = String.valueOf(book).replaceAll("[^A-Za-z0-9._-]", "_");
+        if (safe.isEmpty() || safe.matches("\\.+")) safe = "_" + safe;   // never "." or ".." (outside scans/)
+        return new File(scansDir, safe);
     }
 
     void deleteScans(String book) {
@@ -511,11 +516,14 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean deleteBook(String name) {
-            if (name != null && name.equals(pdfName)) closePdf();
+            if (name == null || name.isEmpty()) return false;
             File f = new File(booksDir, name);
+            if (!booksDir.equals(f.getParentFile())) return false;          // checked before anything is deleted
+            if (name.equals(pdfName)) closePdf();
+            boolean ok = f.delete();
             new File(coversDir, name + ".jpg").delete();
             deleteScans(name);
-            return f.getParentFile().equals(booksDir) && f.delete();
+            return ok;
         }
 
         /** GET a catalog page. The answer arrives as App.onHttp({id, status, url, type, body, error}). */

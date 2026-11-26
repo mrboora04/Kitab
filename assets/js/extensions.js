@@ -121,7 +121,11 @@ const ExtUI = {
           try { await Sources.install(official, e); updated++; } catch (err) { /* stays on its version; offered under Updates */ }
         }
       }
-      if (updated) { Browse.shelfCache = {}; if (Browse._shelvesBox) Browse._shelvesBox._key = ''; }
+      if (updated) {
+        Browse.shelfCache = {}; Sources.catalogCache = {};
+        try { Object.keys(localStorage).filter((k) => k.startsWith('er.shelf.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+        if (Browse._shelvesBox) Browse._shelvesBox._key = '';
+      }
       let updates = 0;
       for (const x of Object.values(Sources.installed)) {
         for (const r of Sources.repos) { const ix = Sources.indexes[r.url]; const e = ix && ix.sources.find((q) => q.id === x.def.id); if (e && Number(e.version) > x.def.version) updates++; }

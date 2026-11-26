@@ -662,16 +662,22 @@ const Browse = {
   },
 
   async more(view) {
+    if (view._more || !view.feed.next) return;          // a second tap while it loads does nothing
+    view._more = true;
     const btn = $('#feedMore');
     btn.textContent = 'Loading…';
+    btn.disabled = true;
     try {
       const next = await this.loadFeed(view.feed.next, view.source);
+      if (this.stack[this.stack.length - 1] !== view) return;   // you went elsewhere meanwhile
       view.feed.next = next.next;
       view.feed.entries = view.feed.entries.concat(next.entries);
       this.drawEntries(view, next.entries, true);
     } catch (e) {
-      btn.textContent = 'Load more';
-      App.toast(e.message, 3500);
+      if (this.stack[this.stack.length - 1] === view) { btn.textContent = 'Load more'; App.toast(e.message, 3500); }
+    } finally {
+      view._more = false;
+      btn.disabled = false;
     }
   },
 
@@ -918,6 +924,7 @@ const Browse = {
     else {
       this.saved[d.entry.id || d.entry.title] = name;
       store.set('er.dl', this.saved);
+      if (store.get(App.bookKey(name), null)) App.forgetFile(name);   // the same name had another file before
       const meta = App.bookMeta(name);
       meta.title = d.entry.title;
       if (d.entry.authors && d.entry.authors.length) meta.author = d.entry.authors.join(', ');
