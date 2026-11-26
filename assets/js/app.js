@@ -334,7 +334,7 @@ const App = {
 
   /* Called from Java */
   onHttp(r) { Opds.answer(r); },
-  onDownload(id, pct) { Browse.onDownload(id, pct); },
+  onDownload(id, pct, bytes) { Browse.onDownload(id, pct, bytes); },
   onDownloaded(id, name, err) { Browse.onDownloaded(id, name, err); },
 
   /* Called from Java */

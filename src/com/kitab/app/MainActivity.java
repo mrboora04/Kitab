@@ -618,10 +618,11 @@ public class MainActivity extends Activity {
                     Http.Result r = Http.download(url, tmp, 300L << 20, new Http.Progress() {
                         public void onProgress(long done, long total) {
                             long now = System.currentTimeMillis();
-                            if (total > 0 && now - last[0] > 250) {
+                            if (now - last[0] > 250) {
                                 last[0] = now;
-                                final int pct = (int) (done * 100 / total);
-                                runOnUiThread(new Runnable() { public void run() { js("window.App && App.onDownload(" + JSONObject.quote(id) + "," + pct + ")"); }});
+                                final int pct = total > 0 ? (int) (done * 100 / total) : -1;   // -1: the site did not say how big it is
+                                final long got = done;
+                                runOnUiThread(new Runnable() { public void run() { js("window.App && App.onDownload(" + JSONObject.quote(id) + "," + pct + "," + got + ")"); }});
                             }
                         }
                     }, auth);

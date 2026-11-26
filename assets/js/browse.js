@@ -813,16 +813,21 @@ const Browse = {
   drawSheet() {
     const e = this.sheetEntry;
     if (!e) return;
-    const dl = Object.values(this.downloads).find((d) => d.entry === e);
+    const dl = this.downloadOf(e);
     const have = this.have(e);
     const size = (f) => (f.size ? ` · ${Math.max(1, Math.round(f.size / 1024 / 102.4) / 10)} MB` : '');
+    const name = (f) => f.label || f.format;
+    const got = dl && (dl.pct >= 0 ? `${dl.pct}%` : dl.bytes ? `${(dl.bytes / 1048576).toFixed(1)} MB` : '');
     const buttons = dl
-      ? `<button class="btn primary wide" disabled>Downloading… ${dl.pct}%</button><div class="dlbar"><i style="width:${dl.pct}%"></i></div>`
+      ? `<button class="btn primary wide" disabled>${dl.open ? 'Opening when it arrives…' : 'Downloading…'} ${got}</button><div class="dlbar${dl.pct >= 0 ? '' : ' busy'}"><i style="width:${dl.pct >= 0 ? dl.pct : 100}%"></i></div>`
       : have
         ? `<button class="btn primary wide" id="readNow">Read now</button>`
-        : (e.read ? `<button class="btn primary wide" id="readOnline">Read now</button>` : '') + (e.formats.length
-          ? e.formats.slice(0, 3).map((f, i) => `<button class="btn ${i || e.read ? '' : 'primary'} wide" data-dl="${i}">${e.read ? 'Keep' : 'Download'} ${f.format}${size(f)}</button>`).join('')
-          : e.read ? '' : `<p class="muted">${e._loading ? 'Loading details…' : esc(e._error || 'No EPUB or PDF download is offered for this book.')}</p>`);
+        : e.read
+          ? `<button class="btn primary wide" id="readOnline">Read now</button>` + e.formats.slice(0, 3).map((f, i) => `<button class="btn wide" data-dl="${i}">Keep ${name(f)}${size(f)}</button>`).join('')
+          : e.formats.length
+            // Read now: the quickest file (listed first) is downloaded into the library and opens when it arrives
+            ? `<button class="btn primary wide" id="readFirst">Read now</button>` + e.formats.slice(0, 3).map((f, i) => `<button class="btn wide" data-dl="${i}">Download ${name(f)}${size(f)}</button>`).join('')
+            : `<p class="muted">${e._loading ? 'Loading details…' : esc(e._error || 'No EPUB or PDF download is offered for this book.')}</p>`;
     const src = e._src || (this.stack[this.stack.length - 1] || {}).source || {};
     const facts = [src.name, e.note && !/·/.test(e.note) ? '' : e.note].filter(Boolean).join(' · ');
     const tags = e.tags || [];
@@ -844,6 +849,8 @@ const Browse = {
     if (mt) mt.onclick = () => { mt.remove(); $('#sheetBody .bp-tags').insertAdjacentHTML('beforeend', tags.slice(12).map((t, i) => `<button class="chip" data-tag="${i + 12}">${esc(t)}</button>`).join('')); $$('#sheetBody [data-tag]').forEach((b) => { b.onclick = () => this.openTag(src, tags[b.dataset.tag]); }); };
     const more = $('#bpMore');
     if (more) more.onclick = () => { $('#sheetBody .bp-sum').classList.toggle('folded'); more.textContent = more.textContent === 'More' ? 'Less' : 'More'; };
+    const rf = $('#readFirst');
+    if (rf) rf.onclick = () => this.download(e, e.formats[0], true);
     const ro = $('#readOnline');
     if (ro) ro.onclick = () => { this.closeSheet(); App.openOnline(e); };
     const rn = $('#readNow');
@@ -868,21 +875,28 @@ const Browse = {
     $('#sheetScrim').classList.remove('on');
   },
 
-  download(entry, format) {
+  /** A download of this book in progress, however the book was reached (a shelf, a list, a search). */
+  downloadOf(e) {
+    const key = e.id || e.title;
+    return Object.values(this.downloads).find((d) => d.entry === e || (d.entry.id || d.entry.title) === key) || null;
+  },
+
+  download(entry, format, open) {
     try { if (entry._src && !entry._src.ext) this.guardLocal(format.url, entry._src); } catch (e) { return App.toast(e.message, 4000); }
     if (entry._src && entry._src.ext && !Sources.hostOk(entry._src.def, format.url)) { App.toast('This source may only download from the sites it declared', 4000); return; }
+    if (this.downloadOf(entry)) return;
     const id = 'd' + Date.now();
-    this.downloads[id] = { entry, pct: 0 };
+    this.downloads[id] = { entry, pct: -1, bytes: 0, open: !!open };
     this.drawSheet();
     if (window.Android && Android.downloadBook) Android.downloadBook(id, format.url, entry.title, entry.cover || '', Opds.authFor(format.url));
     else this.onDownloaded(id, null, 'Needs the Android app');
   },
 
-  onDownload(id, pct) {
+  onDownload(id, pct, bytes) {
     const d = this.downloads[id];
     if (!d) return;
-    d.pct = pct;
-    if (this.sheetEntry === d.entry) this.drawSheet();
+    d.pct = pct; d.bytes = bytes || d.bytes;
+    if (this.sheetEntry && this.downloadOf(this.sheetEntry) === d) this.drawSheet();
   },
 
   onDownloaded(id, name, error) {
@@ -901,9 +915,14 @@ const Browse = {
       if (meta.coverUrl) meta.cover = meta.coverUrl;
       meta.addedAt = Date.now();
       store.set(App.bookKey(name), meta);
-      App.toast('Added to your library');
+      if (d.open) {                                   // Read now: open it as soon as it is here
+        if (this.sheetEntry && this.downloadOf(this.sheetEntry) === null) this.closeSheet();
+        setTimeout(() => App.openBook(name), 150);
+      } else App.toast('Added to your library');
     }
-    if (this.sheetEntry === d.entry) this.drawSheet();
+    if (this.sheetEntry && (this.sheetEntry === d.entry || (this.sheetEntry.id || this.sheetEntry.title) === (d.entry.id || d.entry.title))) {
+      if (d.open && !error) this.closeSheet(); else this.drawSheet();
+    }
     if (this.stack.length) {
       const view = this.stack[this.stack.length - 1];
       this.drawEntries(view, view.feed.entries, false);

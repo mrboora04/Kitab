@@ -791,3 +791,7 @@ body .sheet.bookpage { border-radius: 0; box-shadow: none; }
 /* A PDF page drawn by Android: the box shows the trimmed part of the whole page */
 .pdf-page { overflow: hidden; }
 .pdf-page > img.pdf-native { user-select: none; -webkit-user-select: none; pointer-events: none; }
+
+/* a download whose size the site did not say: a moving bar */
+.dlbar.busy i { animation: dlbusy 1.2s ease-in-out infinite alternate; opacity: .55; }
+@keyframes dlbusy { from { opacity: .25; } to { opacity: .7; } }
