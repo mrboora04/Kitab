@@ -1,7 +1,7 @@
 {
-  "versionCode": 42,
-  "versionName": "1.31",
-  "notes": "Shelves follow the language chosen; the Browse page stays put",
+  "versionCode": 43,
+  "versionName": "1.32",
+  "notes": "Fixes from the codebase audit that users can meet",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "c7759c199e6d0db06bc2614a82cd6028a3cb3272d75f36abf00074db24723c32"
+  "sha256": "f3e801b5d0fa8ef00d9b4729dc986304a4e12780155b8e2496a5f60c3bc77938"
 }
