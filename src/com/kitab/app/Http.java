@@ -11,7 +11,7 @@ import java.net.URL;
 
 /** Small blocking HTTP client for catalog pages and book downloads. No Android dependencies, so it is testable on a plain JVM. */
 final class Http {
-    static final String USER_AGENT = "Kitab/1.26 (https://github.com/mrboora04/Kitab; Android ebook reader)";
+    static final String USER_AGENT = "Kitab/1.27 (https://github.com/mrboora04/Kitab; Android ebook reader)";
     static final int MAX_REDIRECTS = 8;
 
     static final class Result {
@@ -36,6 +36,12 @@ final class Http {
             URL url = new URL(current);
             String scheme = url.getProtocol();
             if (!"http".equals(scheme) && !"https".equals(scheme)) throw new IOException("Unsupported address");
+            // never this phone itself or link-local addresses, also after a redirect
+            java.net.InetAddress[] addrs = null;
+            try { addrs = java.net.InetAddress.getAllByName(url.getHost()); } catch (java.net.UnknownHostException e) { /* the connection reports it */ }
+            if (addrs != null) for (java.net.InetAddress a : addrs) {
+                if (a.isLoopbackAddress() || a.isAnyLocalAddress() || a.isLinkLocalAddress()) throw new IOException("That address is not allowed");
+            }
             HttpURLConnection c = (HttpURLConnection) url.openConnection();
             c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(15000);

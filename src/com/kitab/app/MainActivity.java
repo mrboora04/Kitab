@@ -99,16 +99,13 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if (u.toString().startsWith(ORIGIN)) return false;
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, u));
-                } catch (ActivityNotFoundException ignored) {
-                }
-                return true;
+                // Kitab is for reading only: a link never leaves the app
+                return !u.toString().startsWith(ORIGIN);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                pageReady = true;
                 if (pendingOpen != null) {
                     js("window.App && App.openBook(" + JSONObject.quote(pendingOpen) + ")");
                     pendingOpen = null;
@@ -137,6 +134,9 @@ public class MainActivity extends Activity {
     }
 
     static final String ACTION_INSTALLED = "com.kitab.app.UPDATE_STATUS";
+    static final String EXTRA_NONCE = "com.kitab.app.NONCE";
+    /** A random code for the update being installed: an answer without it did not come from Android's installer. */
+    static volatile String installNonce;
 
     @Override
     protected void onNewIntent(Intent intent) {
@@ -151,7 +151,10 @@ public class MainActivity extends Activity {
 
     /** Android's installer reports back: ask the user to confirm, or tell the page why it did not work. */
     void onInstallStatus(Intent intent) {
+        String nonce = intent.getStringExtra(EXTRA_NONCE);
+        if (nonce == null || installNonce == null || !installNonce.equals(nonce)) return;   // not our install: ignore it
         int st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999);
+        if (st != PackageInstaller.STATUS_PENDING_USER_ACTION) installNonce = null;          // the install is over
         if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirm != null) {
@@ -171,14 +174,23 @@ public class MainActivity extends Activity {
         js("window.App && App.onUpdateDone(" + JSONObject.quote(why) + ")");
     }
 
-    /** "Open with Kitab" from a file manager or browser download. */
+    volatile boolean pageReady;
+
+    /** "Open with Kitab" from a file manager or browser download: copied in the background, then opened. */
     void handleIntent(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
-        try {
-            pendingOpen = importBook(intent.getData());
-        } catch (Exception e) {
-            toast("Could not open file: " + e.getMessage());
-        }
+        final Uri uri = intent.getData();
+        new Thread(new Runnable() { public void run() {
+            try {
+                final String name = importBook(uri);
+                runOnUiThread(new Runnable() { public void run() {
+                    if (pageReady) js("window.App && App.openBook(" + JSONObject.quote(name) + ")");
+                    else pendingOpen = name;                    // opened when the page has loaded
+                }});
+            } catch (final Exception e) {
+                runOnUiThread(new Runnable() { public void run() { toast("Could not open file: " + e.getMessage()); }});
+            }
+        }}).start();
     }
 
     @Override
@@ -220,12 +232,25 @@ public class MainActivity extends Activity {
             else throw new Exception("only PDF, EPUB and TXT files are supported");
         }
         File out = new File(booksDir, name);
+        File part = new File(booksDir, name + ".part");
+        final long MAX = 300L << 20;                        // the same limit as downloads
         try (InputStream in = getContentResolver().openInputStream(uri);
-             OutputStream os = new FileOutputStream(out)) {
+             OutputStream os = new FileOutputStream(part)) {
+            if (in == null) throw new Exception("the file could not be read");
             byte[] buf = new byte[1 << 16];
+            long done = 0;
             int n;
-            while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+            while ((n = in.read(buf)) > 0) {
+                done += n;
+                if (done > MAX) throw new Exception("the file is larger than 300 MB");
+                os.write(buf, 0, n);
+            }
+        } catch (Exception e) {
+            part.delete();
+            throw e;
         }
+        if (out.exists() && !out.delete()) { part.delete(); throw new Exception("could not replace the existing file"); }
+        if (!part.renameTo(out)) { part.delete(); throw new Exception("could not save the file"); }
         return name;
     }
 
@@ -470,6 +495,7 @@ public class MainActivity extends Activity {
                 File apk = new File(getCacheDir(), "kitab-update.apk");
                 try {
                     if (!url.startsWith("https://")) throw new Exception("The update address is not safe");
+                    if (sha256 == null || !sha256.matches("[0-9a-fA-F]{64}")) throw new Exception("The update has no checksum, so Kitab will not install it");
                     final long[] last = {0};
                     Http.download(url, apk, 200L << 20, new Http.Progress() {
                         public void onProgress(long done, long total) {
@@ -481,7 +507,7 @@ public class MainActivity extends Activity {
                             }
                         }
                     }, null);
-                    if (sha256 != null && sha256.length() > 0 && !sha256.equalsIgnoreCase(sha256Of(apk)))
+                    if (!sha256.equalsIgnoreCase(sha256Of(apk)))
                         throw new Exception("The download was damaged. Try again");
                     PackageInstaller installer = getPackageManager().getPackageInstaller();
                     PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
@@ -495,7 +521,12 @@ public class MainActivity extends Activity {
                             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
                             session.fsync(out);
                         }
-                        Intent back = new Intent(MainActivity.this, MainActivity.class).setAction(ACTION_INSTALLED);
+                        byte[] rnd = new byte[16];
+                        new java.security.SecureRandom().nextBytes(rnd);
+                        StringBuilder nb = new StringBuilder();
+                        for (byte x : rnd) nb.append(String.format("%02x", x));
+                        installNonce = nb.toString();
+                        Intent back = new Intent(MainActivity.this, MainActivity.class).setAction(ACTION_INSTALLED).putExtra(EXTRA_NONCE, installNonce);
                         int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? 0x02000000 /* FLAG_MUTABLE */ : 0);
                         session.commit(PendingIntent.getActivity(MainActivity.this, sid, back, flags).getIntentSender());
                     } finally {

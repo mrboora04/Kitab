@@ -305,8 +305,25 @@ const Browse = {
   },
 
   /** One place that reads a feed: built-in and your own catalogs (OPDS), or an installed source (ext: addresses). */
+  /** A private address (this phone, your home network): only the catalog that lives there may use it. */
+  localTarget(url) {
+    let h;
+    try { h = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, ''); } catch (e) { return false; }
+    return h === 'localhost' || !h.includes('.') && !h.includes(':') || /\.(local|lan|home|internal|localdomain)$/.test(h)
+      || /^(10|127|0)\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)
+      || /^(::1?|f[cd][0-9a-f]{2}:.*|fe80:.*)$/.test(h);
+  },
+
+  guardLocal(url, src) {
+    if (!this.localTarget(url)) return;
+    let own = '', to = '';
+    try { own = new URL(src.url).host; to = new URL(url).host; } catch (e) { /* refused below */ }
+    if (!own || own !== to) throw new Error('This catalog tried to reach a device on your own network, so Kitab stopped it');
+  },
+
   async loadFeed(url, src) {
     if (/^ext:/.test(url)) return Object.assign(await Sources.load(url), { url });
+    if (src && !src.ext) this.guardLocal(url, src);
     if (src && src.ext && !Sources.hostOk(src.def, url)) throw new Error('This source tried to reach a website it did not declare, so Kitab stopped it');
     return Opds.load(url);
   },
@@ -815,6 +832,7 @@ const Browse = {
   },
 
   download(entry, format) {
+    try { if (entry._src && !entry._src.ext) this.guardLocal(format.url, entry._src); } catch (e) { return App.toast(e.message, 4000); }
     if (entry._src && entry._src.ext && !Sources.hostOk(entry._src.def, format.url)) { App.toast('This source may only download from the sites it declared', 4000); return; }
     const id = 'd' + Date.now();
     this.downloads[id] = { entry, pct: 0 };

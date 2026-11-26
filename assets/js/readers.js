@@ -73,7 +73,8 @@ async function openPdf(url) {
   }
 }
 
-const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false };
+// isEvalSupported: false closes CVE-2024-4367 in pdf.js 3.x (a crafted font could run code in the app)
+const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false, isEvalSupported: false };
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -853,7 +854,8 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner, force) {
         if (sharp.confidence > best.confidence) best = sharp;
       }
       // where the words are rides along as an invisible comment, so the original page can be selected too
-      return best.html + (best.words && best.words.length ? `<!--W:${JSON.stringify(best.words)}-->` : '');
+      // "--" is written as -\u002d so a scanned word can never end the comment early (it is still the same JSON)
+      return best.html + (best.words && best.words.length ? `<!--W:${JSON.stringify(best.words).replace(/--/g, '-\\u002d')}-->` : '');
     }, !quiet, owner);
     ScanStore.put(key, n, html);
     if (App.reader && App.reader.refreshText && App.name === key) App.reader.refreshText(n);
@@ -1727,9 +1729,13 @@ class EpubReader {
  * Nothing is downloaded but the pages you look at. A location is { page }.
  * ==================================================================== */
 class ScanOnlineReader {
-  constructor(stage, app, url) {
+  constructor(stage, app, url, hosts) {
     this.app = app;
     this.url = url;
+    // pictures and words are only fetched from the sites the source declared (or the page list's own site)
+    let own = '';
+    try { own = new URL(url).hostname; } catch (e) { own = ''; }
+    this.hosts = (hosts && hosts.length ? hosts : []).concat(own ? [own] : []);
     this.n = 1;
     this.pages = [];
     this.words = new Map();
@@ -1779,7 +1785,9 @@ class ScanOnlineReader {
         img: (body && body.id) || (v2 && v2['@id']) || '',
         text: (c.annotations && c.annotations[0] && c.annotations[0].id) || '',
       };
-    }).filter((p) => /^https:/.test(p.svc || p.img));
+    }).map((p) => Object.assign(p, {
+      svc: this.allowed(p.svc) ? p.svc : '', img: this.allowed(p.img) ? p.img : '', text: this.allowed(p.text) ? p.text : '',
+    })).filter((p) => p.svc || p.img);
     if (!pages.length) throw new Error('This book has no pages to show');
     if (!this.wrap.isConnected) return;               // closed meanwhile
     this.pages = pages;
@@ -1788,6 +1796,12 @@ class ScanOnlineReader {
     // now the page has its exact size, its page number and its words
     this.show();                                        // the same page again, now from the page list
     this.app.onRelocated();
+  }
+
+  allowed(u) {
+    let h;
+    try { const x = new URL(u); if (x.protocol !== 'https:') return false; h = x.hostname; } catch (e) { return false; }
+    return this.hosts.some((d) => (d.startsWith('*.') ? h === d.slice(2) || h.endsWith(d.slice(1)) : h === d));
   }
 
   scaleFor(p) {

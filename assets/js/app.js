@@ -148,7 +148,8 @@ const App = {
     const meta = this.bookMeta(name);
     Object.assign(meta, {
       title: e.title, author: (e.authors || []).join(', '), cover: meta.cover || e.cover || '',
-      online: { read: e.read, formats: (e.formats || []).slice(0, 3), id: e.id || '', source: (e._src && e._src.name) || '' },
+      online: { read: e.read, formats: (e.formats || []).slice(0, 3), id: e.id || '', source: (e._src && e._src.name) || '',
+        hosts: e._src && e._src.def ? (e._src.def.hosts || []).concat(e._src.def.coverHosts || []) : [] },
     });
     store.set(this.bookKey(name), meta);
     store.set('er.online', [name].concat(store.get('er.online', []).filter((n) => n !== name)).slice(0, 200));
@@ -381,7 +382,7 @@ const App = {
         this.showScanState(OCR.current && OCR.current.label);
       } else if (type === 'online') {
         if (!this.meta.online || !this.meta.online.read) throw new Error('This book is no longer available online');
-        this.reader = new ScanOnlineReader($('#stage'), this, this.meta.online.read);
+        this.reader = new ScanOnlineReader($('#stage'), this, this.meta.online.read, this.meta.online.hosts);
         await this.reader.open(this.meta.loc);
       } else if (type === 'epub') {
         this.reader = new EpubReader($('#stage'), this, url, name);
@@ -1333,9 +1334,10 @@ const Updater = {
   go() {
     if (this.busy || !this.newer()) return;
     if (!(window.Android && Android.installUpdate)) return App.toast('Updates work in the Kitab app on your phone');
+    if (!/^[0-9a-f]{64}$/i.test(this.info.sha256 || '')) return App.toast('This update has no checksum, so Kitab will not install it');
     this.busy = true;
     this.show();
-    Android.installUpdate(this.info.apk, this.info.sha256 || '');
+    Android.installUpdate(this.info.apk, this.info.sha256);
   },
 
   progress(pct) { const b = $('#updateGo'); if (b) b.textContent = `Downloading ${pct}%`; },
