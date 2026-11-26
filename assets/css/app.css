@@ -801,3 +801,7 @@ body .sheet.bookpage { border-radius: 0; box-shadow: none; }
 .bp-sum { cursor: pointer; }
 .bp-sum.folded { -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
 .bp-tags .chip.more { min-width: 48px; min-height: 36px; }
+
+/* The Browse page fills the screen's width with its padding inside, so shelves that reach the edges cannot push it sideways */
+#pane-browse #sourceView { margin: 0 -16px; padding-left: 16px; padding-right: 16px; overflow-x: hidden; overscroll-behavior-x: none; }
+.pane { overflow-x: hidden; }

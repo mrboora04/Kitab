@@ -215,7 +215,12 @@ const Browse = {
     const def = await Sources.previewDef(p.source);
     if (!def) return null;
     const src = Sources.asCatalog(def);
-    const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(p.list)}&page=1`);
+    const lang = this.lang;
+    if (lang && !this.speaks(src, lang)) return null;          // a source without that language leaves the shelf
+    const b = (def.browse || []).find((x) => x.key === p.list);
+    // a list that cannot be asked in one language only stays when the whole source is in that language
+    if (lang && b && !/\{lang\}/.test(b.url) && def.type !== 'catalog' && def.lang !== lang) return null;
+    const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(p.list)}&page=1${lang ? '&lang=' + lang : ''}`);
     const entries = (feed.entries || []).filter((e) => e.title && !e.nav);
     entries.forEach((e) => { e._src = src; });
     return { src, def, list: p.list, entries, next: feed.next || null };
@@ -239,7 +244,8 @@ const Browse = {
   },
 
   /* A shelf as it was last time, kept on the phone for a day, so Browse shows it at once while it refreshes. */
-  shelfKey(id) { return 'er.shelf.' + id; },
+  shelfKey(id) { return 'er.shelf.' + id + (this.lang ? '@' + this.lang : ''); },
+  cacheId(sh) { return sh.id + (this.lang ? '@' + this.lang : ''); },
 
   keepShelf(sh, hit) {
     const small = (v, d = 0) => (Array.isArray(v) ? v.slice(0, 10).map((x) => small(x, d + 1)) : v && typeof v === 'object' && d < 3
@@ -271,19 +277,19 @@ const Browse = {
   async fillShelf(sh, el) {
     const row = el.querySelector('.shelf-row');
     // last time's books first, at once (they are replaced by fresh ones below)
-    if (!this.shelfCache[sh.id]) {
+    if (!this.shelfCache[this.cacheId(sh)]) {
       const kept = await this.keptShelf(sh).catch(() => null);
       if (kept && !row.querySelector('[data-book]')) { row.innerHTML = ''; this.appendToShelf(row, kept, kept.entries); }
     }
     try {
-      let hit = this.shelfCache[sh.id];
+      let hit = this.shelfCache[this.cacheId(sh)];
       if (!hit || Date.now() - hit.at > 3600e3) {
         const parts = (await Promise.all((sh.mix || [{ source: sh.source, list: sh.list }]).map((p) => this.shelfPart(p).catch(() => null)))).filter(Boolean);
         if (!parts.length) throw new Error('no such source');
         const seen = new Set();
         // covers first within each source, then one from each source in turn
         const entries = this.coversFirst(this.interleave(parts.map((p) => this.coversFirst(p.entries)), seen));
-        hit = this.shelfCache[sh.id] = { parts, entries, seen, at: Date.now() };
+        hit = this.shelfCache[this.cacheId(sh)] = { parts, entries, seen, at: Date.now() };
         this.keepShelf(sh, hit);
       }
       if (!hit.entries.length) throw new Error('empty');

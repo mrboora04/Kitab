@@ -19,7 +19,7 @@ const Sources = {
   repos: store.get('er.repos', null) || [{ url: OFFICIAL_REPO, name: 'Kitab Official' }],
   installed: store.get('er.ext', {}),      // id -> { def, repo, at }
   // Sources that come with Kitab itself (not from the store, cannot be removed)
-  builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 4, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "coverHosts": ["gutenberg.pglaf.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "tagSearch": {"url": "https://gutendex.com/books/?topic={tag}"}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": {"tpl": "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.cover.medium.jpg#{formats.image/jpeg|enc}"}, "tags": ["subjects", "bookshelves"], "formats": [{"format": "EPUB", "url": {"tpl": "https://www.gutenberg.org/ebooks/{id}.epub.noimages#{formats.application/epub+zip|enc}"}}, {"format": "EPUB", "label": "EPUB with pictures", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science"}]} },
+  builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 5, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "coverHosts": ["gutenberg.pglaf.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "tagSearch": {"url": "https://gutendex.com/books/?topic={tag}"}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": {"tpl": "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.cover.medium.jpg#{formats.image/jpeg|enc}"}, "tags": ["subjects", "bookshelves"], "formats": [{"format": "EPUB", "url": {"tpl": "https://www.gutenberg.org/ebooks/{id}.epub.noimages#{formats.application/epub+zip|enc}"}}, {"format": "EPUB", "label": "EPUB with pictures", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular{lang}"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending{lang}"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction{lang}"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children{lang}"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry{lang}"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history{lang}"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science{lang}"}]} },
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
   catalogs: {},                            // source id -> { data, at }: a catalog source's whole list, kept for a while
@@ -285,6 +285,12 @@ const Sources = {
     return { title: def.name, entries, tabs: entries.map((e) => ({ label: e.title, url: e.nav })), next: null, search: { href: '', type: '' } };
   },
 
+  /** The source's own way of asking for one language ('' for all, or when it cannot). */
+  langParam(def, code) {
+    const lf = def.langFilter;
+    return code && lf && lf.values && lf.values[code] ? String(lf.param || '{v}').replace('{v}', lf.values[code]) : '';
+  },
+
   /** Which request a page needs: the address to fetch and which "map" reads it. */
   request(def, op, p) {
     const page = Math.max(1, Number(p.get('page')) || 1);
@@ -292,8 +298,7 @@ const Sources = {
       const s = def.search;
       if (!s) throw new Error('This source cannot be searched');
       // {lang} in the address becomes the source's own way of asking for one language, or nothing for all
-      const code = p.get('lang') || '', lf = def.langFilter;
-      const lang = lf && lf.values && lf.values[code] ? String(lf.param || '{v}').replace('{v}', lf.values[code]) : '';
+      const lang = this.langParam(def, p.get('lang')), code = p.get('lang') || '';
       const per = (s.pager && Number(s.pager.per)) || 24;
       return { url: this.fill(s.url, { q: encodeURIComponent(p.get('q') || ''), page, offset: (page - 1) * per, lang }), m: s, op, page, q: p.get('q') || '', lang: code };
     }
@@ -301,7 +306,8 @@ const Sources = {
       const b = (def.browse || []).find((x) => x.key === p.get('k'));
       if (!b) throw new Error('That list does not exist');
       const m = b.map ? b : Object.assign({}, def.search || {}, b), per = (m.pager && Number(m.pager.per)) || 24;
-      return { url: this.fill(b.url, { page, offset: (page - 1) * per, lang: '' }), m, op, page, k: b.key };
+      const code = /\{lang\}/.test(b.url) ? p.get('lang') || '' : '';        // a list in one language, when the source can
+      return { url: this.fill(b.url, { page, offset: (page - 1) * per, lang: this.langParam(def, code) }), m, op, page, k: b.key, lang: code };
     }
     if (op === 'tag') {
       const t = def.tagSearch;
@@ -321,7 +327,7 @@ const Sources = {
     if (extra && /^https:/.test(extra)) return `ext:${def.id}?op=page&u=${encodeURIComponent(extra)}${req.k ? '&k=' + encodeURIComponent(req.k) : ''}`;
     if (!count) return null;
     if (req.op === 'search') return `ext:${def.id}?op=search&q=${encodeURIComponent(req.q)}&page=${req.page + 1}${req.lang ? '&lang=' + req.lang : ''}`;
-    if (req.op === 'browse') return `ext:${def.id}?op=browse&k=${encodeURIComponent(req.k)}&page=${req.page + 1}`;
+    if (req.op === 'browse') return `ext:${def.id}?op=browse&k=${encodeURIComponent(req.k)}&page=${req.page + 1}${req.lang ? '&lang=' + req.lang : ''}`;
     if (req.op === 'tag') return `ext:${def.id}?op=tag&t=${encodeURIComponent(req.t)}&page=${req.page + 1}`;
     return null;
   },
@@ -353,9 +359,10 @@ const Sources = {
     if (op === 'browse') {
       const b = (def.browse || []).find((x) => x.key === p.get('k'));
       if (!b) throw new Error('That list does not exist');
-      list = list.filter((x) => is(x, b.where));
+      const code = p.get('lang') || '', wantLang = code && def.langFilter && def.langFilter.values ? def.langFilter.values[code] : '';
+      list = list.filter((x) => is(x, b.where) && (!wantLang || x.lang === wantLang));
       if (b.sort) list = list.slice().sort((x, y) => (b.sort === 'title' ? String(x.title).localeCompare(String(y.title)) : (y[b.sort] || 0) - (x[b.sort] || 0)));
-      base = `ext:${def.id}?op=browse&k=${encodeURIComponent(b.key)}`;
+      base = `ext:${def.id}?op=browse&k=${encodeURIComponent(b.key)}${p.get('lang') ? '&lang=' + encodeURIComponent(p.get('lang')) : ''}`;
     } else if (op === 'search') {
       const q = fold(p.get('q')).trim(), code = p.get('lang') || '';
       const want = code && def.langFilter && def.langFilter.values ? def.langFilter.values[code] : '';
