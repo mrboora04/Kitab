@@ -755,30 +755,57 @@ const Browse = {
     }
   },
 
+  /** The book page: cover, title, author, where it comes from; Read now and Download; tags; description. */
   drawSheet() {
     const e = this.sheetEntry;
     if (!e) return;
     const dl = Object.values(this.downloads).find((d) => d.entry === e);
     const have = this.have(e);
+    const size = (f) => (f.size ? ` · ${Math.max(1, Math.round(f.size / 1024 / 102.4) / 10)} MB` : '');
     const buttons = dl
       ? `<button class="btn primary wide" disabled>Downloading… ${dl.pct}%</button><div class="dlbar"><i style="width:${dl.pct}%"></i></div>`
       : have
         ? `<button class="btn primary wide" id="readNow">Read now</button>`
         : (e.read ? `<button class="btn primary wide" id="readOnline">Read now</button>` : '') + (e.formats.length
-          ? e.formats.slice(0, 3).map((f, i) => `<button class="btn ${i || e.read ? '' : 'primary'} wide" data-dl="${i}">${e.read ? 'Keep' : 'Download'} ${f.format}${f.size ? ` · ${Math.max(1, Math.round(f.size / 1024 / 102.4) / 10)} MB` : ''}</button>`).join('')
+          ? e.formats.slice(0, 3).map((f, i) => `<button class="btn ${i || e.read ? '' : 'primary'} wide" data-dl="${i}">${e.read ? 'Keep' : 'Download'} ${f.format}${size(f)}</button>`).join('')
           : e.read ? '' : `<p class="muted">${e._loading ? 'Loading details…' : esc(e._error || 'No EPUB or PDF download is offered for this book.')}</p>`);
+    const src = e._src || (this.stack[this.stack.length - 1] || {}).source || {};
+    const facts = [src.name, e.note && !/·/.test(e.note) ? '' : e.note].filter(Boolean).join(' · ');
+    const tags = e.tags || [];
+    const summary = e.summary || '';
+    const long = summary.length > 280;
     $('#sheetBody').innerHTML = `
-      <div class="sheet-book">
-        <span class="thumb big">${e.cover ? `<img src="${esc(e.cover)}" alt="" onerror="this.remove()">` : ''}<i>${esc(e.title.slice(0, 1))}</i></span>
-        <div><h3>${esc(e.title)}</h3><p class="muted">${esc((e.authors || []).join(', '))}</p></div>
+      <div class="bp-head">
+        <span class="bp-cover cover${e.cover ? '' : ' noimg'}" style="--c1:hsl(${this.tint(e.title)} 38% 42%);--c2:hsl(${this.tint(e.title)} 45% 24%)">
+          <span class="gen"><span class="gt">${esc(e.title.slice(0, 90))}</span><span class="ga">${esc((e.authors || []).join(', ').slice(0, 60))}</span></span>
+          ${e.cover ? `<img src="${esc(e.cover)}" alt="" onerror="this.parentNode.classList.add('noimg');this.remove()">` : ''}</span>
+        <div class="bp-title"><h3>${esc(e.title)}</h3>${(e.authors || []).length ? `<p class="bp-author">${esc(e.authors.join(', '))}</p>` : ''}${facts ? `<p class="muted bp-facts">${esc(facts)}</p>` : ''}</div>
       </div>
-      ${e.summary ? `<p class="summary">${esc(e.summary.slice(0, 600))}${e.summary.length > 600 ? '…' : ''}</p>` : ''}
-      <div class="actions">${buttons}</div>`;
+      <div class="actions">${buttons}</div>
+      ${tags.length ? `<div class="bp-tags">${tags.slice(0, 12).map((t, i) => `<button class="chip" data-tag="${i}">${esc(t)}</button>`).join('')}${tags.length > 12 ? `<button class="chip more" data-moretags>+${tags.length - 12}</button>` : ''}</div>` : ''}
+      ${summary ? `<p class="summary bp-sum${long ? ' folded' : ''}">${esc(summary.slice(0, 2400))}</p>${long ? '<button class="bp-more" id="bpMore">More</button>' : ''}` : ''}`;
     $$('#sheetBody [data-dl]').forEach((b) => { b.onclick = () => this.download(e, e.formats[b.dataset.dl]); });
+    $$('#sheetBody [data-tag]').forEach((b) => { b.onclick = () => this.openTag(src, tags[b.dataset.tag]); });
+    const mt = $('#sheetBody [data-moretags]');
+    if (mt) mt.onclick = () => { mt.remove(); $('#sheetBody .bp-tags').insertAdjacentHTML('beforeend', tags.slice(12).map((t, i) => `<button class="chip" data-tag="${i + 12}">${esc(t)}</button>`).join('')); $$('#sheetBody [data-tag]').forEach((b) => { b.onclick = () => this.openTag(src, tags[b.dataset.tag]); }); };
+    const more = $('#bpMore');
+    if (more) more.onclick = () => { $('#sheetBody .bp-sum').classList.toggle('folded'); more.textContent = more.textContent === 'More' ? 'Less' : 'More'; };
     const ro = $('#readOnline');
     if (ro) ro.onclick = () => { this.closeSheet(); App.openOnline(e); };
     const rn = $('#readNow');
     if (rn) rn.onclick = () => { const f = this.saved[e.id || e.title]; this.closeSheet(); App.openBook(f); };
+  },
+
+  /** A tag on a book page: more books with that tag from the same source (or a search for it). */
+  async openTag(src, tag) {
+    if (!src || !tag) return;
+    this.closeSheet();
+    if (App.tab !== 'browse') App.showTab('browse');
+    const def = src.ext && src.def;
+    if (def && def.tagSearch && def.tagSearch.url) return this.open(src, `ext:${def.id}?op=tag&t=${encodeURIComponent(tag)}&page=1`, tag);
+    const url = await Opds.searchUrl(src, null, tag).catch(() => null);
+    if (url) return this.open(src, url, tag);
+    App.toast('This source cannot look up books by subject');
   },
 
   closeSheet() {

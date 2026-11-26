@@ -19,7 +19,7 @@ const Sources = {
   repos: store.get('er.repos', null) || [{ url: OFFICIAL_REPO, name: 'Kitab Official' }],
   installed: store.get('er.ext', {}),      // id -> { def, repo, at }
   // Sources that come with Kitab itself (not from the store, cannot be removed)
-  builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 2, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "coverHosts": ["gutenberg.pglaf.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": {"tpl": "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.cover.medium.jpg#{formats.image/jpeg|enc}"}, "formats": [{"format": "EPUB", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science"}]} },
+  builtin: { gutenberg: {"schema": 1, "id": "gutenberg", "name": "Project Gutenberg", "version": 3, "lang": "multi", "builtin": true, "license": "Public domain", "site": "https://www.gutenberg.org", "icon": "📚", "blurb": "Over 75,000 free classics, public domain", "hosts": ["gutendex.com", "www.gutenberg.org"], "coverHosts": ["gutenberg.pglaf.org"], "type": "json", "langFilter": {"param": "&languages={v}", "values": {"en": "en", "es": "es", "fr": "fr", "de": "de", "it": "it", "pt": "pt", "ru": "ru", "zh": "zh", "ja": "ja", "ar": "ar", "hi": "hi", "la": "la"}}, "tagSearch": {"url": "https://gutendex.com/books/?topic={tag}"}, "search": {"url": "https://gutendex.com/books/?search={q}{lang}", "list": "results", "next": "next", "map": {"id": "id", "title": "title", "authors": "authors[].name", "summary": "summaries.0", "cover": {"tpl": "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.cover.medium.jpg#{formats.image/jpeg|enc}"}, "tags": ["subjects", "bookshelves"], "formats": [{"format": "EPUB", "url": "formats.application/epub+zip"}]}}, "browse": [{"key": "popular", "label": "Popular", "url": "https://gutendex.com/books/?sort=popular"}, {"key": "latest", "label": "Latest", "url": "https://gutendex.com/books/?sort=descending"}, {"key": "fiction", "label": "Fiction", "url": "https://gutendex.com/books/?topic=fiction"}, {"key": "children", "label": "Children", "url": "https://gutendex.com/books/?topic=children"}, {"key": "poetry", "label": "Poetry", "url": "https://gutendex.com/books/?topic=poetry"}, {"key": "history", "label": "History", "url": "https://gutendex.com/books/?topic=history"}, {"key": "science", "label": "Science", "url": "https://gutendex.com/books/?topic=science"}]} },
   indexes: {},                             // repo url -> { name, sources[], at }
   ctx: {},                                 // detail key -> what is needed to open one book's page
   catalogs: {},                            // source id -> { data, at }: a catalog source's whole list, kept for a while
@@ -303,6 +303,12 @@ const Sources = {
       const m = b.map ? b : Object.assign({}, def.search || {}, b), per = (m.pager && Number(m.pager.per)) || 24;
       return { url: this.fill(b.url, { page, offset: (page - 1) * per, lang: '' }), m, op, page, k: b.key };
     }
+    if (op === 'tag') {
+      const t = def.tagSearch;
+      if (!t || !t.url) throw new Error('This source cannot list books by subject');
+      const m = Object.assign({}, def.search || {}, t), per = (m.pager && Number(m.pager.per)) || 24;
+      return { url: this.fill(t.url, { tag: encodeURIComponent(p.get('t') || ''), page, offset: (page - 1) * per, lang: '' }), m, op, page, t: p.get('t') || '' };
+    }
     if (op === 'page') {
       const u = p.get('u');
       const base = p.get('k') ? (def.browse || []).find((x) => x.key === p.get('k')) : null;
@@ -316,6 +322,7 @@ const Sources = {
     if (!count) return null;
     if (req.op === 'search') return `ext:${def.id}?op=search&q=${encodeURIComponent(req.q)}&page=${req.page + 1}${req.lang ? '&lang=' + req.lang : ''}`;
     if (req.op === 'browse') return `ext:${def.id}?op=browse&k=${encodeURIComponent(req.k)}&page=${req.page + 1}`;
+    if (req.op === 'tag') return `ext:${def.id}?op=tag&t=${encodeURIComponent(req.t)}&page=${req.page + 1}`;
     return null;
   },
 
@@ -358,11 +365,30 @@ const Sources = {
     const entries = list.slice((page - 1) * per, page * per).map((x) => ({
       id: this.entryId(def, x.id), title: String(x.title || ''), authors: (x.authors || []).map(String),
       summary: String(x.summary || ''), note: [x.language, x.levelName].filter(Boolean).join(' · '),
+      tags: this.tidyTags(x.tags || [x.language, x.levelName]),
       cover: this.coverOk(def, x.cover) ? x.cover : '',
       formats: this.formats(def, Array.isArray(x.formats) ? x.formats : []),
       read: x.read && this.hostOk(def, String(x.read)) ? String(x.read) : undefined,
     })).filter((e) => e.title);
     return { title: def.name, entries, next: page * per < list.length ? `${base}&page=${page + 1}` : null, search: { href: '', type: '' } };
+  },
+
+  /** Library subjects as short tags: "England -- Fiction" → England, Fiction; no repeats, no long ones, at most 16. */
+  tidyTags(values) {
+    const out = [], seen = new Set();
+    const walk = (v) => {
+      if (Array.isArray(v)) return v.forEach(walk);
+      if (v == null || v === '') return;
+      for (let t of String(v).split(/\s+--\s+|\s*;\s*/)) {
+        t = t.replace(/^(Browsing|Category):\s*/i, '').replace(/[.,:;]+$/, '').replace(/\s+/g, ' ').trim();
+        if (!t || t.length > 40 || /^\d+$/.test(t)) continue;
+        const k = t.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k); out.push(t);
+      }
+    };
+    walk(values);
+    return out.slice(0, 16);
   },
 
   /* --- JSON sources --- */
@@ -395,6 +421,7 @@ const Sources = {
     };
     const cover = this.val(map.cover, it);
     if (this.coverOk(def, cover)) e.cover = cover;
+    e.tags = this.tidyTags([].concat(map.tags || []).map((t) => this.val(t, it)));
     const read = this.val(map.read, it);                 // the book's pages, to read online before downloading
     if (read && this.hostOk(def, String(read))) e.read = String(read);
     e.formats = this.formats(def, (map.formats || []).map((f) => ({ format: f.format, url: this.val(f.url, it) })));

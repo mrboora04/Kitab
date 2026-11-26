@@ -763,3 +763,27 @@ body.is-online .keep-btn { display: inline-block; }
 .li.gbook .cap b { font-size: 14px; }
 .shelf-row > .li.gbook .cap b { font-size: 15px; }
 .shelf-row > .li.gbook .cover .gen .gt { font-size: 18px; }
+
+/* The book page: a full-height sheet with the cover, the actions right under the title, tags and description */
+.sheet.bookpage { top: 0; max-height: none; border-radius: 0; padding-top: calc(var(--top-safe, 0px) + 6px); }
+.sheet.bookpage .sheet-grip { display: none; }
+.sheet.bookpage .close { top: calc(var(--top-safe, 0px) + 8px); }
+.bp-head { display: flex; gap: 16px; align-items: flex-end; margin: 40px 0 16px; }
+.bp-cover { flex: none; width: 128px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; position: relative; box-shadow: 0 2px 6px rgba(0,0,0,.18), 0 14px 28px rgba(0,0,0,.16); }
+.bp-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bp-cover .gen { justify-content: space-between; padding: 12px 10px 10px 14px; }
+.bp-cover .gen .gt { font: 600 15px/1.2 Georgia, "Noto Serif", serif; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.bp-cover .gen .ga { font: 500 11.5px/1.3 system-ui, sans-serif; opacity: .85; }
+.bp-cover:not(.noimg) .gen { display: none; }
+.bp-title { min-width: 0; }
+.bp-title h3 { margin: 0 0 6px; font: 700 22px/1.2 Georgia, "Noto Serif", serif; overflow-wrap: anywhere; }
+.bp-author { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--accent); }
+.bp-facts { margin: 0; font-size: 13px; }
+.bookpage .actions { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
+.bp-tags { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 16px; }
+.bp-tags .chip { font-size: 13px; padding: 6px 12px; background: none; }
+.bp-tags .chip.more { color: var(--accent); }
+.bp-sum { margin: 0; font-size: 15px; line-height: 1.55; white-space: pre-line; }
+.bp-sum.folded { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.bp-more { background: none; border: 0; padding: 6px 0; color: var(--accent); font: 600 14px/1 system-ui, sans-serif; }
+body .sheet.bookpage { border-radius: 0; box-shadow: none; }
