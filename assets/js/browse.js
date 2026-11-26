@@ -848,7 +848,12 @@ const Browse = {
     const mt = $('#sheetBody [data-moretags]');
     if (mt) mt.onclick = () => { mt.remove(); $('#sheetBody .bp-tags').insertAdjacentHTML('beforeend', tags.slice(12).map((t, i) => `<button class="chip" data-tag="${i + 12}">${esc(t)}</button>`).join('')); $$('#sheetBody [data-tag]').forEach((b) => { b.onclick = () => this.openTag(src, tags[b.dataset.tag]); }); };
     const more = $('#bpMore');
-    if (more) more.onclick = () => { $('#sheetBody .bp-sum').classList.toggle('folded'); more.textContent = more.textContent === 'More' ? 'Less' : 'More'; };
+    if (more) {
+      // the whole description opens and closes, not only the small word under it
+      const flip = () => { const open = $('#sheetBody .bp-sum').classList.toggle('folded') === false; more.textContent = open ? 'Less' : 'More'; };
+      more.onclick = flip;
+      $('#sheetBody .bp-sum').onclick = flip;
+    }
     const rf = $('#readFirst');
     if (rf) rf.onclick = () => this.download(e, e.formats[0], true);
     const ro = $('#readOnline');
