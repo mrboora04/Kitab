@@ -1,7 +1,7 @@
 {
-  "versionCode": 38,
-  "versionName": "1.27",
-  "notes": "Security fixes from the audit",
+  "versionCode": 39,
+  "versionName": "1.28",
+  "notes": "PDF pages drawn by Android, shelves shown at once",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "020e8ebe3f66ae8a1edff32effae98b18abeb219dce73693f4dd94d227f5defc"
+  "sha256": "bc0aebb63d6c20135a9bff4cc981ecdb43c36cb39106bd69efb531c44c7485dc"
 }
