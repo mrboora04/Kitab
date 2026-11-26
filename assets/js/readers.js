@@ -76,6 +76,38 @@ async function openPdf(url) {
 // isEvalSupported: false closes CVE-2024-4367 in pdf.js 3.x (a crafted font could run code in the app)
 const PDF_OPTS = { cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', useWorkerFetch: false, isEvalSupported: false };
 
+/** PDF pages drawn by Android itself (much faster than pdf.js); a book Android cannot draw falls back to pdf.js. */
+const NativePdf = {
+  bad: new Set(),
+  ok(key) {
+    try { return !!(key && window.Android && Android.canRenderPdf && Android.canRenderPdf() && !this.bad.has(key)); } catch (e) { return false; }
+  },
+  /** Page n of book `key`, `w` pixels wide, as a loaded <img>; null when Android could not draw it. */
+  image(key, n, w) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => resolve(img);
+      img.onerror = () => { this.bad.add(key); resolve(null); };
+      img.src = `render/${encodeURIComponent(key)}?p=${n}&w=${Math.max(64, Math.min(2400, Math.round(w)))}`;
+    });
+  },
+};
+
+/** A page drawn into a canvas of the viewport's size: by Android when it can, else by pdf.js. */
+async function pageCanvas(page, vp, key) {
+  const c = document.createElement('canvas');
+  c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  if (NativePdf.ok(key)) {
+    const img = await NativePdf.image(key, page.pageNumber, c.width);
+    if (img) { ctx.drawImage(img, 0, 0, c.width, c.height); return c; }
+  }
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  return c;
+}
+
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 /** Text of a DOM range with a pause after headings and paragraphs, for text-to-speech. */
@@ -838,13 +870,7 @@ async function ocrPageHtml(pdf, n, key, onStatus, quiet, owner, force) {
       const base = page.getViewport({ scale: 1 });
       const render = async (width) => {
         const scale = Math.min(width / base.width, (width * 1.45) / base.height, 5);
-        const vp = page.getViewport({ scale });
-        const raw = document.createElement('canvas');
-        raw.width = Math.floor(vp.width); raw.height = Math.floor(vp.height);
-        const rctx = raw.getContext('2d');
-        rctx.fillStyle = '#fff'; rctx.fillRect(0, 0, raw.width, raw.height);
-        await page.render({ canvasContext: rctx, viewport: vp }).promise;
-        return raw;
+        return pageCanvas(page, page.getViewport({ scale }), key);
       };
       // 1600 px wide is quick and enough for normal print. A page the scanner is unsure about (but not hopeless) gets one more
       // read from a sharper render (good scans carry detail that small print needs); the surer reading wins.
@@ -889,12 +915,7 @@ async function pageWords(pdf, n, key, high) {
   return OCR.schedule(`${key}:w${n}`, `words ${n}`, async (worker) => {
     const page = await pdf.getPage(n);
     const base = page.getViewport({ scale: 1 });
-    const vp = page.getViewport({ scale: Math.min(1200 / base.width, 1740 / base.height) });
-    const c = document.createElement('canvas');
-    c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-    const x = c.getContext('2d');
-    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-    await page.render({ canvasContext: x, viewport: vp }).promise;
+    const c = await pageCanvas(page, page.getViewport({ scale: Math.min(1200 / base.width, 1740 / base.height) }), key);
     const { data } = await worker.recognize(c);
     const words = OCR.boxes(data, c);
     WordStore.put(key, n, words);
@@ -947,12 +968,7 @@ async function pdfTextSource(pdf, opts) {
     for (let n = i * per + 1; n <= Math.min(pdf.numPages, (i + 1) * per, i * per + 2); n++) {
       try {
         const page = await pdf.getPage(n);
-        const vp = page.getViewport({ scale: 720 / page.getViewport({ scale: 1 }).width });   // quick to draw
-        const c = document.createElement('canvas');
-        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        const c = await pageCanvas(page, page.getViewport({ scale: 720 / page.getViewport({ scale: 1 }).width }), opts.key);   // quick to draw
         out.push(`<img class="scan-preview" src="${c.toDataURL('image/jpeg', 0.7)}" alt="Page ${n}">`);
       } catch (e) { /* no preview */ }
     }
@@ -1091,13 +1107,8 @@ class PdfPageReader {
   async cropOf(page) {
     if (!this.trim) return { x0: 0, y0: 0, x1: 1, y1: 1 };
     if (this.crops.has(page.pageNumber)) return this.crops.get(page.pageNumber);
-    const vp = page.getViewport({ scale: 200 / page.getViewport({ scale: 1 }).width });
-    const c = document.createElement('canvas');
-    c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
-    const ctx = c.getContext('2d', { willReadFrequently: true });
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    const c = await pageCanvas(page, page.getViewport({ scale: 200 / page.getViewport({ scale: 1 }).width }), this.app.name);
+    const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
     let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
     for (let y = 0; y < c.height; y++) {
       for (let x = 0; x < c.width; x++) {
@@ -1129,6 +1140,22 @@ class PdfPageReader {
     let rs = scale * dpr;
     const maxSide = 4096;
     if (cw * rs > maxSide || ch * rs > maxSide) rs = Math.min(maxSide / cw, maxSide / ch);
+    box.style.width = (cw * scale) + 'px';
+    box.style.height = (ch * scale) + 'px';
+    if (NativePdf.ok(this.app.name)) {
+      // Android draws the whole page; the box shows the trimmed part of it
+      let cancelled = false;
+      box._task = { cancel() { cancelled = true; } };
+      const img = await NativePdf.image(this.app.name, n, base.width * rs);
+      if (cancelled) return;
+      if (img) {
+        img.className = 'pdf-native';
+        Object.assign(img.style, { position: 'absolute', left: (-crop.x0 * base.width * scale) + 'px', top: (-crop.y0 * base.height * scale) + 'px', width: (base.width * scale) + 'px', height: (base.height * scale) + 'px', maxWidth: 'none' });
+        box.innerHTML = '';
+        box.appendChild(img);
+        return this.finishPage(n, box, page, scale, crop, base);
+      }
+    }
     const vp = page.getViewport({ scale: rs, offsetX: -crop.x0 * base.width * rs, offsetY: -crop.y0 * base.height * rs });
     const canvas = document.createElement('canvas');
     canvas.width = Math.floor(cw * rs); canvas.height = Math.floor(ch * rs);
@@ -1141,6 +1168,11 @@ class PdfPageReader {
     try { await task.promise; } catch (e) { return; }  // cancelled
     box.innerHTML = '';
     box.appendChild(canvas);
+    this.finishPage(n, box, page, scale, crop, base);
+  }
+
+  /** Highlights and the selectable text on top of a drawn page. */
+  finishPage(n, box, page, scale, crop, base) {
     box._n = n;
     box._crop = crop;
     const hl = document.createElement('div');

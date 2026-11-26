@@ -5,6 +5,9 @@ import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
+import android.graphics.Bitmap;
+import android.graphics.pdf.PdfRenderer;
+import android.os.ParcelFileDescriptor;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
@@ -273,6 +276,46 @@ public class MainActivity extends Activity {
     }
 
     /** Serves the bundled UI from assets/ and the library from /books/. */
+    /* ---- PDF pages drawn by Android itself (PdfRenderer): much faster than drawing them in JavaScript ---- */
+    private PdfRenderer pdfRenderer;
+    private ParcelFileDescriptor pdfFd;
+    private String pdfName;
+
+    /** Page n (from 1) of a PDF in the library, `w` pixels wide, as a JPEG. The last PDF stays open for the next page. */
+    synchronized byte[] renderPdfPage(String name, int n, int w) throws Exception {
+        File f = new File(booksDir, name);
+        if (!f.getCanonicalPath().startsWith(booksDir.getCanonicalPath() + File.separator)) throw new Exception("bad path");
+        if (!name.equals(pdfName) || pdfRenderer == null) {
+            closePdf();
+            pdfFd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
+            pdfRenderer = new PdfRenderer(pdfFd);
+            pdfName = name;
+        }
+        if (n < 1 || n > pdfRenderer.getPageCount()) throw new Exception("no such page");
+        PdfRenderer.Page page = pdfRenderer.openPage(n - 1);
+        try {
+            int pw = Math.max(1, page.getWidth()), ph = Math.max(1, page.getHeight());
+            w = Math.max(64, Math.min(w, 2400));
+            int h = (int) ((long) w * ph / pw);
+            if (h > 3200) { h = 3200; w = Math.max(64, (int) ((long) h * pw / ph)); }
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            bmp.eraseColor(Color.WHITE);
+            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(w * h / 4);
+            bmp.compress(Bitmap.CompressFormat.JPEG, 90, out);
+            bmp.recycle();
+            return out.toByteArray();
+        } finally {
+            page.close();
+        }
+    }
+
+    synchronized void closePdf() {
+        try { if (pdfRenderer != null) pdfRenderer.close(); } catch (Exception ignored) { }
+        try { if (pdfFd != null) pdfFd.close(); } catch (Exception ignored) { }
+        pdfRenderer = null; pdfFd = null; pdfName = null;
+    }
+
     WebResourceResponse serve(Uri uri, Map<String, String> requestHeaders) {
         String url = uri.toString();
         if (!url.startsWith(ORIGIN)) return null;
@@ -284,6 +327,18 @@ public class MainActivity extends Activity {
         headers.put("Cache-Control", "no-cache");
         try {
             InputStream in;
+            if (path.startsWith("/render/")) {
+                Map<String, String> h = new HashMap<>();
+                h.put("Cache-Control", "max-age=3600");
+                try {
+                    int n = Integer.parseInt(uri.getQueryParameter("p"));
+                    int w = Integer.parseInt(uri.getQueryParameter("w"));
+                    byte[] jpg = renderPdfPage(path.substring("/render/".length()), n, w);
+                    return new WebResourceResponse("image/jpeg", null, 200, "OK", h, new java.io.ByteArrayInputStream(jpg));
+                } catch (Throwable e) {                       // the page reader falls back to drawing it in JavaScript
+                    return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", h, new java.io.ByteArrayInputStream(new byte[0]));
+                }
+            }
             if (path.startsWith("/covers/")) {
                 File f = new File(coversDir, path.substring("/covers/".length()));
                 if (!f.getCanonicalPath().startsWith(coversDir.getCanonicalPath())) throw new Exception("bad path");
@@ -456,6 +511,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean deleteBook(String name) {
+            if (name != null && name.equals(pdfName)) closePdf();
             File f = new File(booksDir, name);
             new File(coversDir, name + ".jpg").delete();
             deleteScans(name);
@@ -479,6 +535,10 @@ public class MainActivity extends Activity {
                 runOnUiThread(new Runnable() { public void run() { js("window.App && App.onHttp(" + json + ")"); }});
             }}).start();
         }
+
+        /** True: PDF pages can be drawn by Android (served at /render/<book>?p=<page>&w=<pixels>). */
+        @JavascriptInterface
+        public boolean canRenderPdf() { return Build.VERSION.SDK_INT >= 21; }
 
         /** This app's version number (versionCode), so the page can tell whether an update is newer. */
         @JavascriptInterface

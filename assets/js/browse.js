@@ -238,8 +238,43 @@ const Browse = {
     return out;
   },
 
+  /* A shelf as it was last time, kept on the phone for a day, so Browse shows it at once while it refreshes. */
+  shelfKey(id) { return 'er.shelf.' + id; },
+
+  keepShelf(sh, hit) {
+    const small = (v, d = 0) => (Array.isArray(v) ? v.slice(0, 10).map((x) => small(x, d + 1)) : v && typeof v === 'object' && d < 3
+      ? Object.fromEntries(Object.entries(v).slice(0, 30).map(([k, x]) => [k, small(x, d + 1)])) : typeof v === 'string' ? v.slice(0, 300) : v);
+    const items = hit.entries.slice(0, 12).map((e) => {
+      const m = e.detail && /[?&]c=([^&]+)/.exec(e.detail);
+      return {
+        e: { id: e.id, title: e.title, authors: e.authors, summary: (e.summary || '').slice(0, 600), cover: e.cover, formats: e.formats, read: e.read, tags: (e.tags || []).slice(0, 16), note: e.note, detail: e.detail, src: e._src && e._src.def ? e._src.def.id : '' },
+        ctx: m && Sources.ctx[m[1]] ? [m[1], small(Sources.ctx[m[1]])] : null,
+      };
+    });
+    const text = JSON.stringify({ at: Date.now(), items });
+    if (text.length < 80000) { try { localStorage.setItem(this.shelfKey(sh.id), text); } catch (e) { /* storage full: just not kept */ } }
+  },
+
+  async keptShelf(sh) {
+    const k = store.get(this.shelfKey(sh.id), null);
+    if (!k || !k.items || Date.now() - k.at > 86400e3) return null;
+    const entries = [];
+    for (const it of k.items) {
+      const def = it.e.src && await Sources.previewDef(it.e.src).catch(() => null);
+      if (!def) continue;
+      if (it.ctx) Sources.ctx[it.ctx[0]] = it.ctx[1];
+      entries.push(Object.assign({}, it.e, { authors: it.e.authors || [], formats: it.e.formats || [], _src: Sources.asCatalog(def) }));
+    }
+    return entries.length ? { parts: [], entries, seen: new Set(entries.map((e) => String(e.title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim())), at: 0, kept: true } : null;
+  },
+
   async fillShelf(sh, el) {
     const row = el.querySelector('.shelf-row');
+    // last time's books first, at once (they are replaced by fresh ones below)
+    if (!this.shelfCache[sh.id]) {
+      const kept = await this.keptShelf(sh).catch(() => null);
+      if (kept && !row.querySelector('[data-book]')) { row.innerHTML = ''; this.appendToShelf(row, kept, kept.entries); }
+    }
     try {
       let hit = this.shelfCache[sh.id];
       if (!hit || Date.now() - hit.at > 3600e3) {
@@ -249,8 +284,10 @@ const Browse = {
         // covers first within each source, then one from each source in turn
         const entries = this.coversFirst(this.interleave(parts.map((p) => this.coversFirst(p.entries)), seen));
         hit = this.shelfCache[sh.id] = { parts, entries, seen, at: Date.now() };
+        this.keepShelf(sh, hit);
       }
       if (!hit.entries.length) throw new Error('empty');
+      if (row.scrollLeft > 10) return;            // you are already looking along last time's books: leave them
       row.innerHTML = '';
       this.appendToShelf(row, hit, hit.entries);
       row.scrollLeft = 0;                         // a shelf starts at its first book
@@ -272,7 +309,7 @@ const Browse = {
         }).finally(() => { row._busy = false; });
       };
     } catch (e) {
-      el.remove();                                // a shelf that cannot be filled just is not shown
+      if (!row.querySelector('[data-book]')) el.remove();   // a shelf that cannot be filled (and was not kept) is not shown
     }
   },
 

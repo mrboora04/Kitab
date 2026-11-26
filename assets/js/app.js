@@ -445,11 +445,7 @@ const App = {
       const page = await this.pdf.getPage(1);
       const vp = page.getViewport({ scale: 1 });
       const s = 240 / vp.width;
-      const c = document.createElement('canvas');
-      c.width = 240; c.height = Math.round(vp.height * s);
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: s }) }).promise;
+      const c = await pageCanvas(page, page.getViewport({ scale: s }), this.name);
       this.meta.cover = c.toDataURL('image/jpeg', 0.72);
       this.saveMeta();
     } catch (e) { /* no cover */ }

@@ -787,3 +787,7 @@ body.is-online .keep-btn { display: inline-block; }
 .bp-sum.folded { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .bp-more { background: none; border: 0; padding: 6px 0; color: var(--accent); font: 600 14px/1 system-ui, sans-serif; }
 body .sheet.bookpage { border-radius: 0; box-shadow: none; }
+
+/* A PDF page drawn by Android: the box shows the trimmed part of the whole page */
+.pdf-page { overflow: hidden; }
+.pdf-page > img.pdf-native { user-select: none; -webkit-user-select: none; pointer-events: none; }
