@@ -1,7 +1,7 @@
 {
-  "versionCode": 41,
-  "versionName": "1.30",
-  "notes": "The book page's description opens with a tap anywhere on it",
+  "versionCode": 42,
+  "versionName": "1.31",
+  "notes": "Shelves follow the language chosen; the Browse page stays put",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "2570370de2612309f0ef3d4755ee9ba19230bd330d59a21557eedabb25fb1d1d"
+  "sha256": "c7759c199e6d0db06bc2614a82cd6028a3cb3272d75f36abf00074db24723c32"
 }
