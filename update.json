@@ -1,7 +1,7 @@
 {
-  "versionCode": 37,
-  "versionName": "1.26",
-  "notes": "A book page with tags",
+  "versionCode": 38,
+  "versionName": "1.27",
+  "notes": "Security fixes from the audit",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "400e718b418c72f6dc6db1f550dedda9fdf3f939a1905a5e1ed53013e11cb81c"
+  "sha256": "020e8ebe3f66ae8a1edff32effae98b18abeb219dce73693f4dd94d227f5defc"
 }
