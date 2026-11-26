@@ -1,7 +1,7 @@
 {
-  "versionCode": 36,
-  "versionName": "1.25",
-  "notes": "Read now opens at once; shelves mix sources; title covers",
+  "versionCode": 37,
+  "versionName": "1.26",
+  "notes": "A book page with tags",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "20b4ef7f2d9bb93145f17b4f7fde8b33f5029e5df27b697685f8694eb610bd6d"
+  "sha256": "400e718b418c72f6dc6db1f550dedda9fdf3f939a1905a5e1ed53013e11cb81c"
 }
