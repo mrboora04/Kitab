@@ -1,7 +1,7 @@
 {
-  "versionCode": 43,
-  "versionName": "1.32",
-  "notes": "Fixes from the codebase audit that users can meet",
+  "versionCode": 44,
+  "versionName": "1.33",
+  "notes": "Merge branch 'main' of https://github.com/mrboora04/kitab",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "f3e801b5d0fa8ef00d9b4729dc986304a4e12780155b8e2496a5f60c3bc77938"
+  "sha256": "f554c348a3d8cebd57567fc861f349530dc4222e82f328eb3de0a40f82c092be"
 }
