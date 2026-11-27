@@ -130,6 +130,8 @@ const Browse = {
     if (this._moreIo) this._moreIo.disconnect();
     box.innerHTML = '<div id="shelfEnd" class="shelf-end"></div>';
     this._shown = new Set();                      // source:list pairs already on a shelf
+    this._filled = new Set();                     // the lists already on a filled shelf
+    this._claims = null;
     this._pool = null; this._rr = 0;
     this._shelfIo = new IntersectionObserver((seen) => {
       for (const e of seen) {
@@ -193,6 +195,9 @@ const Browse = {
       if (!this._pool.some((p) => p.lists.length)) {           // every list of every source is on a shelf
         const end = $('#shelfEnd');
         if (end) end.innerHTML = '<p class="shelf-done">That’s every shelf. Search or add sources for more.</p>';
+        if (end && this.lang) setTimeout(() => {                  // a language with few books: say so instead of an empty page
+          if (box === this._shelvesBox && !document.querySelector('#shelves .bshelf')) end.innerHTML = `<p class="shelf-done">Few free books in ${esc((this.LANGS.find(([c]) => c === this.lang) || [])[1] || this.lang)} yet. Search may still find some.</p>`;
+        }, this.SHELF_WAIT + 1000);
         this._moreIo.disconnect();
       }
     } catch (e) { /* try again on the next scroll */ }
@@ -210,9 +215,9 @@ const Browse = {
     return withCover.length >= 6 ? withCover : withCover.concat(without);
   },
 
-  /** One list of one source: its first page, ready for a shelf. */
-  async shelfPart(p) {
-    const def = await Sources.previewDef(p.source);
+  /** Can this list be on a shelf now (its source is there and has the language chosen)? Asks no library. */
+  async partFits(p) {
+    const def = await Sources.previewDef(p.source).catch(() => null);
     if (!def) return null;
     const src = Sources.asCatalog(def);
     const lang = this.lang;
@@ -220,11 +225,24 @@ const Browse = {
     const b = (def.browse || []).find((x) => x.key === p.list);
     // a list that cannot be asked in one language only stays when the whole source is in that language
     if (lang && b && !/\{lang\}/.test(b.url) && def.type !== 'catalog' && def.lang !== lang) return null;
+    return { def, src };
+  },
+
+  /** How long a shelf waits for a library before it shows what it has (or goes away, when it has nothing). */
+  SHELF_WAIT: 15000,
+
+  /** One list of one source: its first page, ready for a shelf. */
+  async shelfPart(p) {
+    const ok = await this.partFits(p);
+    if (!ok) return null;
+    const { def, src } = ok, lang = this.lang;
     const feed = await Sources.load(`ext:${def.id}?op=browse&k=${encodeURIComponent(p.list)}&page=1${lang ? '&lang=' + lang : ''}`);
     const entries = (feed.entries || []).filter((e) => e.title && !e.nav);
     entries.forEach((e) => { e._src = src; });
     return { src, def, list: p.list, entries, next: feed.next || null };
   },
+
+  titleKey(e) { return String(e.title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); },
 
   /** Books from several lists, taken in turn (one from each), without the same title twice. */
   interleave(lists, seen) {
@@ -281,42 +299,73 @@ const Browse = {
       const kept = await this.keptShelf(sh).catch(() => null);
       if (kept && !row.querySelector('[data-book]')) { row.innerHTML = ''; this.appendToShelf(row, kept, kept.entries); }
     }
-    try {
-      let hit = this.shelfCache[this.cacheId(sh)];
-      if (!hit || Date.now() - hit.at > 3600e3) {
-        const parts = (await Promise.all((sh.mix || [{ source: sh.source, list: sh.list }]).map((p) => this.shelfPart(p).catch(() => null)))).filter(Boolean);
-        if (!parts.length) throw new Error('no such source');
-        const seen = new Set();
-        // covers first within each source, then one from each source in turn
-        const entries = this.coversFirst(this.interleave(parts.map((p) => this.coversFirst(p.entries)), seen));
-        hit = this.shelfCache[this.cacheId(sh)] = { parts, entries, seen, at: Date.now() };
-        this.keepShelf(sh, hit);
-      }
-      if (!hit.entries.length) throw new Error('empty');
-      if (row.scrollLeft > 10) return;            // you are already looking along last time's books: leave them
-      row.innerHTML = '';
-      this.appendToShelf(row, hit, hit.entries);
-      row.scrollLeft = 0;                         // a shelf starts at its first book
-      // sideways, too: the next page of every list comes when you reach the end of the row
-      row.onscroll = () => {
-        const waiting = hit.parts.filter((p) => p.next);
-        if (row._busy || !waiting.length || hit.entries.length >= 120) return;
-        if (row.scrollLeft + row.clientWidth < row.scrollWidth - row.clientWidth * 0.8) return;
-        row._busy = true;
-        Promise.all(waiting.map((p) => Sources.load(p.next).then((f) => {
-          const got = (f.entries || []).filter((e) => e.title && !e.nav);
-          got.forEach((e) => { e._src = p.src; });
-          p.next = got.length ? f.next || null : null;
-          return got;
-        }).catch(() => { p.next = null; return []; }))).then((lists) => {
-          const more = this.interleave(lists, hit.seen);
-          hit.entries = hit.entries.concat(more);
-          this.appendToShelf(row, hit, more);
-        }).finally(() => { row._busy = false; });
-      };
-    } catch (e) {
-      if (!row.querySelector('[data-book]')) el.remove();   // a shelf that cannot be filled (and was not kept) is not shown
-    }
+    let hit = this.shelfCache[this.cacheId(sh)];
+    if (hit && Date.now() - hit.at <= 3600e3) return this.showShelf(sh, el, hit);
+    const box = this._shelvesBox, filled = this._filled;
+    // which of its lists can be here. A list already on a shelf above is left out when the shelf has others (in one
+    // language most libraries drop out, and two shelves would show the same books); with no list left, no shelf.
+    // Shelves decide in turn, top to bottom.
+    const mix = sh.mix || [{ source: sh.source, list: sh.list }];
+    const key = (p) => p.source + ':' + p.list;
+    const use = await (this._claims = (this._claims || Promise.resolve()).then(async () => {
+      const fits = await Promise.all(mix.map((p) => this.partFits(p)));
+      const can = mix.filter((p, i) => fits[i]);
+      const fresh = can.filter((p) => !filled.has(key(p)));
+      fresh.forEach((p) => filled.add(key(p)));
+      return fresh;
+    }).catch(() => []));
+    if (box !== this._shelvesBox) return;                       // the shelves were drawn again meanwhile
+    if (!use.length) { if (!row.querySelector('[data-book]')) el.remove(); return; }
+    // every library is asked at once; the shelf shows books as soon as the first answers (a slow library joins later)
+    const got = new Array(use.length).fill(null);
+    let left = use.length;
+    const draw = () => {
+      const parts = got.filter((x) => x && x.entries.length);
+      if (!parts.length) return;
+      const seen = new Set();
+      // covers first within each source, then one from each source in turn
+      let entries = this.coversFirst(this.interleave(parts.map((p) => this.coversFirst(p.entries)), seen));
+      // books already on a shelf above go to the end (in one language, shelves can share their few top books)
+      const above = new Set();
+      for (let x = el.previousElementSibling; x; x = x.previousElementSibling) if (x._titles) x._titles.forEach((t) => above.add(t));
+      const isNew = (e) => !above.has(this.titleKey(e));
+      entries = entries.filter(isNew).concat(entries.filter((e) => !isNew(e)));
+      el._titles = new Set(entries.slice(0, 8).map((e) => this.titleKey(e)));
+      hit = this.shelfCache[this.cacheId(sh)] = { parts, entries, seen, at: Date.now() };
+      if (!left) this.keepShelf(sh, hit);
+      if (box === this._shelvesBox && el.isConnected) this.showShelf(sh, el, hit);
+    };
+    const timer = setTimeout(() => { if (!got.some((x) => x && x.entries.length) && !row.querySelector('[data-book]')) el.remove(); }, this.SHELF_WAIT);
+    await Promise.all(use.map((p, i) => this.shelfPart(p).catch(() => null).then((part) => { got[i] = part; left--; draw(); })));
+    clearTimeout(timer);
+    if (!got.some((x) => x && x.entries.length) && !row.querySelector('[data-book]')) el.remove();   // nothing to show: no shelf
+  },
+
+  /** Puts a shelf's books on screen (unless you are already looking along it). */
+  showShelf(sh, el, hit) {
+    const row = el.querySelector('.shelf-row');
+    if (!hit.entries.length) { if (!row.querySelector('[data-book]')) el.remove(); return; }
+    if (row.scrollLeft > 10 && row.querySelector('[data-book]')) return;   // you are reading along it: leave it
+    row.innerHTML = '';
+    this.appendToShelf(row, hit, hit.entries);
+    row.scrollLeft = 0;                         // a shelf starts at its first book
+    // sideways, too: the next page of every list comes when you reach the end of the row
+    row.onscroll = () => {
+      const waiting = hit.parts.filter((p) => p.next);
+      if (row._busy || !waiting.length || hit.entries.length >= 120) return;
+      if (row.scrollLeft + row.clientWidth < row.scrollWidth - row.clientWidth * 0.8) return;
+      row._busy = true;
+      Promise.all(waiting.map((p) => Sources.load(p.next).then((f) => {
+        const got = (f.entries || []).filter((e) => e.title && !e.nav);
+        got.forEach((e) => { e._src = p.src; });
+        p.next = got.length ? f.next || null : null;
+        return got;
+      }).catch(() => { p.next = null; return []; }))).then((lists) => {
+        const more = this.interleave(lists, hit.seen);
+        hit.entries = hit.entries.concat(more);
+        this.appendToShelf(row, hit, more);
+      }).finally(() => { row._busy = false; });
+    };
   },
 
   appendToShelf(row, hit, entries) {
