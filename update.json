@@ -1,7 +1,7 @@
 {
-  "versionCode": 44,
-  "versionName": "1.33",
-  "notes": "Merge branch 'main' of https://github.com/mrboora04/kitab",
+  "versionCode": 45,
+  "versionName": "1.34",
+  "notes": "EPUBs that list a missing page open",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "f554c348a3d8cebd57567fc861f349530dc4222e82f328eb3de0a40f82c092be"
+  "sha256": "a2ae88f3d59bdee0fa698ad5997ce1c8feeaaf8853901a043c6c947e0626d870"
 }
