@@ -1778,10 +1778,13 @@ class ScanOnlineReader {
     this.wrap = document.createElement('div');
     this.wrap.className = 'scan-online';
     stage.appendChild(this.wrap);
-    attachGestures(this.wrap, app, () => true);
+    attachGestures(this.wrap, app, () => this.paged);
+    this.wrap.addEventListener('scroll', () => this.onScroll(), { passive: true });
     this._resize = () => this.relayout();
     window.addEventListener('resize', this._resize);
   }
+
+  get paged() { return this.app.settings.flow !== 'scroll'; }
 
   static label(l) {
     if (!l) return '';
@@ -1853,6 +1856,9 @@ class ScanOnlineReader {
   /** The page fitted to the screen, with its words laid over it once they arrive. */
   show() {
     if (!this.pages.length) return this.showDirect();
+    if (!this.paged) return this.showScroll();
+    this.wrap.classList.remove('scroll');
+    this.boxes = null;
     const p = this.pages[this.n - 1];
     const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
     const scale = Math.min((W - 8) / p.w, (H - 8) / p.h);
@@ -1879,8 +1885,70 @@ class ScanOnlineReader {
     this.app.onRelocated();
   }
 
+  /** Scroll layout: every page one under the other, the width of the screen; pictures load as they come near. */
+  showScroll() {
+    const W = this.wrap.clientWidth || window.innerWidth, dpr = window.devicePixelRatio || 1;
+    this.wrap.classList.add('scroll');
+    this.wrap.innerHTML = '';
+    if (this._io) this._io.disconnect();
+    this._io = new IntersectionObserver((seen) => seen.forEach((e) => { if (e.isIntersecting) this.fillBox(e.target); }), { root: this.wrap, rootMargin: '1200px 0px' });
+    this.boxes = this.pages.map((p, i) => {
+      const scale = (W - 8) / p.w;
+      const box = document.createElement('div');
+      box.className = 'so-page';
+      box.style.width = Math.round(p.w * scale) + 'px';
+      box.style.height = Math.round(p.h * scale) + 'px';
+      box._n = i + 1; box._scale = scale; box._w = p.w * scale * dpr;
+      box.innerHTML = '<div class="so-wait"><div class="spinner"></div></div><img alt="" draggable="false"><div class="so-text"></div>';
+      this.wrap.appendChild(box);
+      this._io.observe(box);
+      return box;
+    });
+    this.cur = this.boxes[this.n - 1];
+    this._scrolling = true;                     // the jump below is not the reader scrolling
+    this.wrap.scrollTop = this.cur ? this.cur.offsetTop - 4 : 0;
+    requestAnimationFrame(() => { this._scrolling = false; });
+    this.app.onRelocated();
+  }
+
+  fillBox(box) {
+    if (box._filled) return;
+    box._filled = true;
+    const p = this.pages[box._n - 1], img = box.querySelector('img');
+    img.onload = () => box.classList.add('loaded');
+    img.onerror = () => { box.querySelector('.so-wait').innerHTML = '<p>This page did not load. Check your internet connection.</p>'; box._filled = false; };
+    img.src = this.imageUrl(p, box._w);
+    this.layWords(box._n, box, box._scale);
+  }
+
+  /** Scrolling: the page at the top third of the screen is the page you are on. */
+  onScroll() {
+    if (this.paged || !this.boxes || this._scrolling) return;
+    if (this._sraf) return;
+    this._sraf = requestAnimationFrame(() => {
+      this._sraf = 0;
+      const y = this.wrap.scrollTop + this.wrap.clientHeight / 3;
+      let k = this.n;
+      while (k < this.boxes.length && this.boxes[k].offsetTop <= y) k++;
+      while (k > 1 && this.boxes[k - 1].offsetTop > y) k--;
+      if (k !== this.n) { this.n = k; this.cur = this.boxes[k - 1]; this.app.onRelocated(); }
+    });
+  }
+
+  /** Scroll layout: go to page n. */
+  scrollToPage(n) {
+    this.n = clamp(n, 1, this.boxes.length);
+    this.cur = this.boxes[this.n - 1];
+    this._scrolling = true;
+    this.wrap.scrollTop = this.cur.offsetTop - 4;
+    requestAnimationFrame(() => { this._scrolling = false; });
+    this.app.onRelocated();
+  }
+
   /** Before the page list arrives: the Internet Archive's own picture of page n, sized when it loads. */
   showDirect() {
+    this.wrap.classList.remove('scroll');
+    this.boxes = null;
     const W = this.wrap.clientWidth || window.innerWidth, H = this.wrap.clientHeight || window.innerHeight;
     const dpr = window.devicePixelRatio || 1;
     const url = (n) => `https://archive.org/download/${encodeURIComponent(this.ia)}/page/n${n - 1}_w${Math.min(1600, Math.round((W - 8) * dpr))}.jpg`;
@@ -1931,16 +1999,31 @@ class ScanOnlineReader {
 
   async layWords(n, box, scale) {
     const list = await this.wordsOf(n);
-    if (this.cur !== box) return;
+    if (!box.isConnected) return;
     box.querySelector('.so-text').innerHTML = list.map((w) =>
       `<span style="left:${(w.x * scale).toFixed(1)}px;top:${(w.y * scale).toFixed(1)}px;width:${(w.w * scale).toFixed(1)}px;height:${(w.h * scale).toFixed(1)}px;font-size:${(w.h * scale * 0.9).toFixed(1)}px">${esc(w.t)} </span>`).join('');
     this.markFound(box);
   }
 
   get total() { return this.pages.length || this.end || 0; }
-  async next() { if (this.total && this.n >= this.total) return false; this.n++; this.show(); return true; }
-  async prev() { if (this.n <= 1) return false; this.n--; this.show(); return true; }
-  async goTo(loc) { this.n = Math.max(1, loc && loc.page || 1); if (this.total) this.n = Math.min(this.n, this.total); this.show(); }
+  async next() {
+    if (this.total && this.n >= this.total) return false;
+    if (this.boxes) {                                   // scroll layout: a screen further down
+      const before = this.wrap.scrollTop;
+      this.wrap.scrollTop += this.wrap.clientHeight * 0.9;
+      return this.wrap.scrollTop !== before;
+    }
+    this.n++; this.show(); return true;
+  }
+  async prev() {
+    if (this.boxes) { const before = this.wrap.scrollTop; this.wrap.scrollTop -= this.wrap.clientHeight * 0.9; return this.wrap.scrollTop !== before; }
+    if (this.n <= 1) return false; this.n--; this.show(); return true;
+  }
+  async goTo(loc) {
+    const n = Math.max(1, loc && loc.page || 1);
+    if (this.boxes) return this.scrollToPage(n);
+    this.n = this.total ? Math.min(n, this.total) : n; this.show();
+  }
   goToProgress(f) { return this.total ? this.goTo({ page: Math.round(f * (this.total - 1)) + 1 }) : Promise.resolve(); }
 
   location() {
@@ -1975,7 +2058,7 @@ class ScanOnlineReader {
   }
 
   /** After a jump from search: mark the words found on the page. */
-  flash(h) { this._flash = h; if (this.cur && this.cur._n === h.loc.page) this.markFound(this.cur); }
+  flash(h) { this._flash = h; const box = this.boxes ? this.boxes[h.loc.page - 1] : this.cur; if (box && box._n === h.loc.page && box.querySelector('.so-text span')) this.markFound(box); }
 
   markFound(box) {
     const h = this._flash;
@@ -1995,6 +2078,7 @@ class ScanOnlineReader {
 
   destroy() {
     window.removeEventListener('resize', this._resize);
+    if (this._io) this._io.disconnect();
     this.wrap.remove();
   }
 }
