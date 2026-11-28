@@ -1,7 +1,7 @@
 {
-  "versionCode": 45,
-  "versionName": "1.34",
-  "notes": "EPUBs that list a missing page open",
+  "versionCode": 46,
+  "versionName": "1.35",
+  "notes": "Scanned books read online follow the Scroll layout",
   "apk": "https://raw.githubusercontent.com/mrboora04/Kitab/main/dist/Kitab.apk",
-  "sha256": "a2ae88f3d59bdee0fa698ad5997ce1c8feeaaf8853901a043c6c947e0626d870"
+  "sha256": "3f0bf6487149b52d5e99611e01d61c46802dd99f650c6ba78f5c378d537d1af6"
 }
