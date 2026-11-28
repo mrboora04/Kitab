@@ -1498,7 +1498,8 @@ class EpubReader {
     });
     walk(this.book.navigation.toc, 0);
     this.tocItems = flat;
-    await this.render(loc && loc.cfi);
+    // the first page has 30 s too: a book the reader cannot lay out says so instead of "Opening…" for ever
+    await Promise.race([this.render(loc && loc.cfi), new Promise((_, bad) => setTimeout(() => bad(new Error('This book could not be shown. The file may be damaged.')), 30000))]);
     this.prepareLocations();
   }
 
